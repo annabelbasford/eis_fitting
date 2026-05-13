@@ -161,10 +161,6 @@ Outputs:
 ## Summary CSV
 
 | sample | circuit_name | R_1 | SD_R_1 | R_1_percent_error | CPE_1_0 | SD_CPE_1_0 | CPE_1_0_percent_error | CPE_1_1 | SD_CPE_1_1 | CPE_1_1_percent_error | R_2 | SD_R_2 | R_2_percent_error | R_3 | SD_R_3 | R_3_percent_error | CPE_2_0 | SD_CPE_2_0 | CPE_2_0_percent_error | CPE_2_1 | SD_CPE_2_1 | CPE_2_1_percent_error |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-
-Full CSV has the following columns of the fit:
-
 
 
 ---
