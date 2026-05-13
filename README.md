@@ -4,8 +4,7 @@ Python workflow for processing, fitting, and visualising electrochemical impedan
 
 This repository provides tools for:
 
-- Cleaning and restructuring raw EIS export files
-- Combining Bode and Nyquist datasets into a unified CSV format
+- Cleaning and restructuring raw EIS export files into unified CSV format
 - Fitting impedance spectra to equivalent circuit models
 - Extracting fitted circuit parameters and uncertainties
 - Generating publication-ready Nyquist and Bode plots
@@ -19,10 +18,11 @@ This repository provides tools for:
 
 The preprocessing scripts:
 
-- Parse raw instrument CSV exports
+- Parse raw instrument MPR exports and converting into CSV format
+- Parse raw instrument CSV exports from Metrohm equipment
 - Detect Bode phase, Bode magnitude, and Nyquist sections
 - Standardise EIS column naming conventions
-- Combine all measurements into a single structured CSV
+- Combine all measurements per experiment into a single structured CSV
 
 Output format:
 
@@ -36,7 +36,7 @@ Output format:
 Supports fitting multiple equivalent circuit models using:
 
 - `impedance.py`
-- Non-linear least squares optimisation
+- open-source Python package
 
 Currently implemented models include:
 
@@ -72,7 +72,7 @@ Automatically generates:
 - Phase response
 - Data vs fitted model
 
-Plots are saved as high-resolution PNG files.
+Plots are saved as PNG files.
 
 ---
 
@@ -80,12 +80,13 @@ Plots are saved as high-resolution PNG files.
 
 ```text
 .
-├── csv/                  # Input EIS CSV files
-├── fits/                 # Output fitting results
-│   ├── plots/            # Generated figures
-│   └── *.csv             # Fitted parameter tables
-├── eis_analysis.py       # Main fitting workflow
-├── split_eis_csv.py      # Raw EIS preprocessing script
+├── csv/                              # Input EIS CSV files
+├── fits/                             # Output fitting results
+│   ├── plots/                        # Generated figures
+│   └── *.csv                         # Fitted parameter tables
+├── 1_eis_analysis.py                 # Main fitting workflow
+├── 0_eis_mpr_data_conversion.py      # Raw EIS mpr file preprocessing script
+├── 0_eis_metrohm_data_clean.py       # Raw EIS metrohm preprocessing script
 └── README.md
 ```
 
@@ -126,17 +127,23 @@ pip install numpy pandas matplotlib seaborn impedance
 ## 1. Preprocess raw EIS export
 
 ```bash
-python split_eis_csv.py raw_export.csv
+python 0_eis_mpr_data_conversion.py
 ```
 
-This generates a cleaned combined CSV file.
+This converts the mpr data into CSV files.
+
+```bash
+python 0_eis_metrohn_data_clean.py
+```
+
+This generates a cleaned combined CSV file of the Metrohm data.
 
 ---
 
 ## 2. Run equivalent circuit fitting
 
 ```bash
-python eis_analysis.py
+python 1_eis_analysis.py
 ```
 
 Outputs:
@@ -153,8 +160,12 @@ Outputs:
 
 ## Summary CSV
 
-| sample | circuit_name | R_1 | SD_R_1 | R_1_percent_error |
-|---|---|---|---|---|
+| sample | circuit_name | R_1 | SD_R_1 | R_1_percent_error |....
+|---|---|---|---|---|....
+
+Full CSV has the following columns of the fit:
+
+sample,circuit_name,circuit_string,fit_success,R_1,SD_R_1,R_1_percent_error,CPE_1_0,SD_CPE_1_0,CPE_1_0_percent_error,CPE_1_1,SD_CPE_1_1,CPE_1_1_percent_error,R_2,SD_R_2,R_2_percent_error,R_3,SD_R_3,R_3_percent_error,CPE_2_0,SD_CPE_2_0,CPE_2_0_percent_error,CPE_2_1,SD_CPE_2_1,CPE_2_1_percent_error
 
 ---
 
@@ -166,20 +177,6 @@ Outputs:
 - matplotlib
 - seaborn
 - impedance.py
-
----
-
-# Future Improvements
-
-Potential future additions include:
-
-- Automatic circuit selection
-- Fit quality metrics
-- Residual analysis
-- Conductivity extraction workflows
-- Batch statistics and comparison tools
-- Interactive plotting
-- Bayesian or global optimisation fitting methods
 
 ---
 
