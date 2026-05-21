@@ -82,11 +82,15 @@ Plots are saved as PNG files.
 .
 ├── csv/                              # Input EIS CSV files
 ├── fits/                             # Output fitting results
-│   ├── plots/                        # Generated figures
+│   ├── parameter_bar_plots/          # Generated figures
+│   ├── plots/                        # Generated Bode and Nyquist plots
 │   └── *.csv                         # Fitted parameter tables
-├── 1_eis_analysis.py                 # Main fitting workflow
+├── metrohm/                          # Raw Metrohm CSV files
+├── mpr/                              # Raw mpr files
 ├── 0_eis_mpr_data_conversion.py      # Raw EIS mpr file preprocessing script
 ├── 0_eis_metrohm_data_clean.py       # Raw EIS metrohm preprocessing script
+├── 1_eis_fitting.py                  # Main fitting workflow
+├── 2_eis_analysis.py                 # Main analysis workflow
 └── README.md
 ```
 
@@ -143,7 +147,7 @@ This generates a cleaned combined CSV file of the Metrohm data.
 ## 2. Run equivalent circuit fitting
 
 ```bash
-python 1_eis_analysis.py
+python 1_eis_fitting.py
 ```
 
 Outputs:
@@ -161,6 +165,19 @@ Outputs:
 ## Summary CSV
 
 | sample | circuit_name | R_1 | SD_R_1 | R_1_percent_error | CPE_1_0 | SD_CPE_1_0 | CPE_1_0_percent_error | CPE_1_1 | SD_CPE_1_1 | CPE_1_1_percent_error | R_2 | SD_R_2 | R_2_percent_error | R_3 | SD_R_3 | R_3_percent_error | CPE_2_0 | SD_CPE_2_0 | CPE_2_0_percent_error | CPE_2_1 | SD_CPE_2_1 | CPE_2_1_percent_error |
+
+## 3. Run equivalent circuit analysis
+
+```bash
+python 2_eis_analysis.py
+```
+
+Outputs:
+
+- Conductivity values
+- Bar plots of the resistance and capacitance from the fitted parameters
+
+---
 
 
 ---
