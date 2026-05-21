@@ -101,8 +101,8 @@ Plots are saved as PNG files.
 ## Clone the repository
 
 ```bash
-git clone https://github.com/USERNAME/REPOSITORY.git
-cd REPOSITORY
+git clone https://github.com/annabelbasford/eis_fitting.git
+cd eis_fitting
 ```
 
 ---
@@ -112,8 +112,8 @@ cd REPOSITORY
 Using conda:
 
 ```bash
-conda create -n eis_analysis python=3.11
-conda activate eis_analysis
+conda create -n eis_fitting python=3.11
+conda activate eis_fitting
 ```
 
 ---
