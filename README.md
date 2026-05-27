@@ -121,7 +121,7 @@ conda activate eis_fitting
 ## Install dependencies
 
 ```bash
-pip install numpy pandas matplotlib seaborn impedance
+pip install numpy pandas matplotlib seaborn impedance galvani
 ```
 
 ---
