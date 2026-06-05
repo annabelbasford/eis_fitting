@@ -23,6 +23,7 @@ The preprocessing scripts:
 - Detect Bode phase, Bode magnitude, and Nyquist sections
 - Standardise EIS column naming conventions
 - Combine all measurements per experiment into a single structured CSV
+- If need be, slices datasets into strictly monotonic frequency sweeps
 
 Output format:
 
@@ -40,19 +41,36 @@ Supports fitting multiple equivalent circuit models using:
 
 Currently implemented models include:
 
-### Randles + CPE
+### Circuit 1 : pseudo-Randles
 
+> **p(R_1-CPE_1,R_2)**
 ```text
-R_1-p(CPE_1,R_2)
+                ┌─ CPE1 ── R1 ─┐
+────────────────┤              ├────────────
+                └───── R2 ─────┘
 ```
 
 ### Interface + Bulk Model
 
+> **R_1-p(R_3-CPE_1,CPE_2,R_2)**
 ```text
-R_1-p(CPE_1,R_2)-p(R_3,CPE_2)
+                 ┌─ R3 ─ CPE1 ┐
+                 │            │
+───── R1 ────────┼─── CPE2 ───┼─────────────
+                 │            │
+                 └──── R2 ────┘
 ```
 
-Additional circuit models can be added through the `CIRCUITS` dictionary.
+Additional circuit models can be added through the `CIRCUITS` dictionary by respecting the following structure :
+
+```json
+"circuit_1": {
+        "string": "p(R_1-CPE_1,R_2)",
+        "guess": [100, 1e-6, 0.9, 1000],
+    }
+```
+
+> The *"guess"* key is used during the fitting methode as a starting point and should thus be **carefully chosen**. We'll also note that these guesses ought to be given **in the same order as the components** in the *"string"* key and that two guesses are expected for a CPE : Q and n
 
 ---
 
@@ -76,23 +94,50 @@ Plots are saved as PNG files.
 
 ---
 
+## Analysis
+
+During the preprocessing, omega_max is determined and added in a column of the clean csv. 
+
+yada yada still a lot of stuff to write here 
+
+---
+---
+
 # Repository Structure
+
+## Recommended general structure
 
 ```text
 .
-├── csv/                              # Input EIS CSV files
-├── fits/                             # Output fitting results
-│   ├── parameter_bar_plots/          # Generated figures
-│   ├── plots/                        # Generated Bode and Nyquist plots
-│   └── *.csv                         # Fitted parameter tables
-├── metrohm/                          # Raw Metrohm CSV files
-├── mpr/                              # Raw mpr files
-├── 0_eis_mpr_data_conversion.py      # Raw EIS mpr file preprocessing script
-├── 0_eis_metrohm_data_clean.py       # Raw EIS metrohm preprocessing script
-├── 1_eis_fitting.py                  # Main fitting workflow
-├── 2_eis_analysis.py                 # Main analysis workflow
-└── README.md
+├── data  
+│   ├─── experiment_1                                        # experimental data folder (.mpr or metrohm csv)
+│   └─── ...                                                 
+├── projects                                                  
+│   └─── eis_fitting                                         
+│        ├─── global.py                                      # main script calling functions from scripts/
+│        ├─── scripts                                        # contains preprocessing, fitting and analysis scripts
+│        └─── processed                                      
+│             ├─── experiment_1                              # see subsection "Output Folder structure"
+│             └─── ...
+└  
 ```
+
+> NB : you can use your own architecture by changing the **PROJECT_ROOT** path in `global.py`
+
+## Experimental data folder structure
+
+```text
+.
+├── experiment_1
+|   ├─── metrohm_raw_data.csv
+|   ├─── raw_data_run1.mpr
+|   .
+|   .
+|   └─── metadata.json                                       # see "Usage" section
+└ 
+```
+> NB : mpr files can contain multiple frenquencies swipe in a raw thanks to the *split_non_monotonic_frequency_csv* in **scripts/eis_preprocess**
+> ⚠️ sample's name **MUST NOT** contain full stops : instead of *"P2U1.2"* use *"P2U1_2"* otherwise everything after the full stop will be read as an extension and won't be processed.
 
 ---
 
@@ -128,27 +173,29 @@ pip install numpy pandas matplotlib seaborn impedance galvani
 
 # Usage
 
-## 1. Preprocess raw EIS export
+Before trying to run the code, make sure your environment is ordered like shown in section "Recomended general Structure"
 
-```bash
-python 0_eis_mpr_data_conversion.py
+## 1. Make sure your data folder is properly ordered (see "Experimental data folder" subsection)  
+
+`metadata.json` file template 
+```json
+{
+    "thickness_cm": 0.1,
+    "SD_thickness_cm": 0.01,
+    "area_cm2": 1.0,
+    "SD_area_cm2": 0.2,
+    "png" : true,
+    "svg": false,     
+    "sigma_f":20    
+}
 ```
 
-This converts the mpr data into CSV files.
+> The *"png"* and *"svg"* keys tells the script if it has to save the plots as .png files and/or transparent .svg files 
+> sigma_f, in Hz, should reflect how precisely the frequency at which -Im(Z) is maximum can be determined
 
-```bash
-python 0_eis_metrohn_data_clean.py
-```
+## 2. If need be, fill in the expectFolders set
 
-This generates a cleaned combined CSV file of the Metrohm data.
-
----
-
-## 2. Run equivalent circuit fitting
-
-```bash
-python 1_eis_fitting.py
-```
+# Example Output
 
 Outputs:
 
@@ -157,28 +204,47 @@ Outputs:
 - Percentage fitting errors
 - Nyquist plots
 - Bode plots
+- parameters bar charts
+
+> NB : Effective capacitances are obtained from CPEs parameters using Hsu-Mansfeld's relation
 
 ---
-
-# Example Output
 
 ## Summary CSV
 
-| sample | circuit_name | R_1 | SD_R_1 | R_1_percent_error | CPE_1_0 | SD_CPE_1_0 | CPE_1_0_percent_error | CPE_1_1 | SD_CPE_1_1 | CPE_1_1_percent_error | R_2 | SD_R_2 | R_2_percent_error | R_3 | SD_R_3 | R_3_percent_error | CPE_2_0 | SD_CPE_2_0 | CPE_2_0_percent_error | CPE_2_1 | SD_CPE_2_1 | CPE_2_1_percent_error |
+| sample | circuit_name | R_1 | SD_R_1 | R_1_percent_error | CPE_1_0 | SD_CPE_1_0 | CPE_1_0_percent_error | CPE_1_1 | SD_CPE_1_1 | CPE_1_1_percent_error | R_2 | SD_R_2 | R_2_percent_error | ... |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
-## 3. Run equivalent circuit analysis
+## Processed folder structure
 
-```bash
-python 2_eis_analysis.py
+```text
+.
+├─── processed 
+│    ├─── experiment_1                                       # see below for recommended naming conventions
+│    |    ├─── csv                                           # clean csv data
+│    |    ├─── fits                                          
+│    |    │    ├─── plots                                    
+│    |    │    │    ├─── sample_1                               
+│    |    │    |    |    ├─── circuit 1                      # Bode, Nyquist and parameter bar charts
+│    .    │    |    .    .
+│    .    │    |    .    └             
+│    │    │    │    └─── all_runs                            # Bode and Nyquist plots                   
+│    |    │    ├─── eis_fit_parameters_circuit_1.csv         
+│    |    .    .
+│    |    .    .
+│    |    │    └─── eis_fit_parameters_all_circuits.csv      
+└    └    └ 
 ```
 
-Outputs:
-
-- Conductivity values
-- Bar plots of the resistance and capacitance from the fitted parameters
+Naming conventions for data folder : INITIALS_experiment-name_date
 
 ---
 
+
+---
+# Important notes
+
+Before implementing new circuits, it is highly recommended to check how the `impedance.py` library handles equivalent circuits : *https://impedancepy.readthedocs.io/en/latest/fitting.html*
 
 ---
 
