@@ -6,6 +6,7 @@ import re
 import pandas as pd
 import numpy as np
 import glob
+import matplotlib.pyplot as plt
 from galvani import BioLogic
 
 from tqdm import tqdm
@@ -238,9 +239,40 @@ def split_non_monotonic_frequency_csv(input_folder):
 
         # gets rid of the original file
         input_file.unlink()
-        
 
-    
-  
-    
-    
+# ----------------------- preprocessing plotting ----------------------- #
+
+def eis_preprocess_plot(input_folder, output_folder):
+    output_folder.mkdir(exist_ok=True)
+
+    for input_file in input_folder.iterdir():
+
+        df = pd.read_csv(input_file)
+
+        if "freq/Hz" not in df.columns:
+            raise ValueError("Column 'freq/Hz' not found.")
+
+        freq = df["freq/Hz"].to_numpy()
+
+        plt.figure(figsize=(12, 5))
+
+        if "Phase(Z)/deg" in df.columns:
+            plt.subplot(1, 2, 1)
+            plt.semilogx(freq, df["Phase(Z)/deg"], marker="o")
+            plt.xlabel("Frequency (Hz)")
+            plt.ylabel("Phase(Z) (deg)")
+            plt.title("Bode Phase Plot")
+            plt.grid(True)
+
+        if "|Z|/Ohm" in df.columns:
+            plt.subplot(1, 2, 2)
+            plt.loglog(freq, df["|Z|/Ohm"], marker="o")
+            plt.xlabel("Frequency (Hz)")
+            plt.ylabel("|Z| (Ohm)")
+            plt.title("Bode Magnitude Plot")
+            plt.grid(True)
+
+        out_file = output_folder / f"{input_file.stem}.png"
+        plt.tight_layout()
+        plt.savefig(out_file)
+        plt.close()

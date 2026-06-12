@@ -1,42 +1,64 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgb, to_hex
 import seaborn as sns
-from pathlib import Path
-from os import unlink
-from math import sqrt
+
+from .utils import save_fig
+
+# ------- Style functions ------- #
+
+
+def lighten_colour(colour, factor=0.2):
+    rgb = np.array(to_rgb(colour))
+    rgb = rgb + (1 - rgb) * factor
+    return to_hex(rgb)
+
+
+def get_parameter_style(param, display_mapping):
+    """
+    Gets colour/order for raw and derived parameters.
+
+    Raw:
+        R_i
+        Q_DL
+
+    Derived:
+        conductivity_S_cm_R_i -> inherits R_i
+        Ceff_DL              -> inherits Q_DL
+    """
+
+    is_derived = False
+    base_param = param
+
+    if param.startswith("conductivity_S_cm_"):
+        base_param = param.replace("conductivity_S_cm_", "")
+        is_derived = True
+
+    elif param.startswith("Ceff_"):
+        base_param = "Q_" + param.replace("Ceff_", "")
+        is_derived = True
+
+    style = display_mapping.get(base_param, {})
+
+    colour = style.get("colour", "gray")
+    order = style.get("order", float("inf"))
+
+    if is_derived:
+        colour = lighten_colour(colour, factor=0.35)
+
+    return order, colour
+
+
+def get_associated_alpha(param):
+    """
+    Returns the alpha column associated with Q or Ceff parameters.
+    """
+
+    if param.startswith("Q_"):
+        return param.replace("Q_", "alpha_")
 
 # ------- Helper functions ------- #
-
-def save_fig(save_path, fig, axes, save_to_png, save_to_svg):
-    """
-    save_path : pathlib class structured like
-    .../fits/plots/sample_name/sample_name_{circuit_name}_nyquist.png"
-
-    fig : see matplotlib
-    axes : set of matplotlib axes
-    save_to_png/csv : Boolean
-    """
-
-    fig.tight_layout()
-
-    if save_to_png:
-        file_path = save_path.with_suffix(".png")
-        fig.savefig(file_path, format="png", dpi=300, bbox_inches="tight")
-    if save_to_svg:
-        file_path = save_path.with_suffix(".svg")
-
-        # transparent background
-        fig.patch.set_alpha(0)
-        # transparent plotting area for each figure
-        for ax in axes:
-            ax.patch.set_alpha(0)
-
-        fig.savefig(
-            file_path, format="svg", transparent=True, dpi=300, bbox_inches="tight"
-        )
-
-    plt.close(fig)
 
 
 def get_element_columns(csv_file, first_chars):
@@ -101,65 +123,52 @@ def add_Ceff_columns(parameters_csv, sigma_omega=0):
     else:
         sigma_omega = sigma_omega
 
-    # Detect CPE indices
-    cpe_ids = sorted(
-        {
-            col.split("_")[1]
-            for col in df.columns
-            if col.startswith("CPE_") and col.endswith("_0")
-        }
-    )
+    for Q_col in [c for c in df.columns if c.startswith("Q_")]:
 
-    # Loop over CPEs
-    for i in cpe_ids:
+        name = Q_col.split("_")[1]
 
-        Q_col = f"CPE_{i}_0"
-        dQ_col = f"SD_CPE_{i}_0"
-        n_col = f"CPE_{i}_1"
-        dn_col = f"SD_CPE_{i}_1"
+        alpha_col = f"alpha_{name}"
+        dQ_col = f"SD_Q_{name}"
+        dalpha_col = f"SD_alpha_{name}"
 
-        if not all(col in df.columns for col in [Q_col, dQ_col, n_col, dn_col]):
-            print(f"Skipping incomplete CPE_{i}")
+        if not all(col in df.columns for col in [alpha_col, dQ_col, dalpha_col]):
+            print(f"Skipping incomplete CPE {name}")
             continue
 
         Q = df[Q_col].astype(float)
         dQ = df[dQ_col].astype(float)
-        n = df[n_col].astype(float)
-        dn = df[dn_col].astype(float)
+        n = df[alpha_col].astype(float)
+        dn = df[dalpha_col].astype(float)
 
         Ceff = Q * omega ** (n - 1)
 
-        # Uncertainty propagation (we sure ???)
         rel = np.sqrt(
             (dQ / Q) ** 2
             + ((n - 1) * sigma_omega / omega) ** 2
             + (np.log(omega) * dn) ** 2
         )
 
-        dCeff = Ceff * rel
-
-        # Store results
-        df[f"Ceff_{i}"] = Ceff
-        df[f"SD_Ceff_{i}"] = dCeff
+        df[f"Ceff_{name}"] = Ceff
+        df[f"SD_Ceff_{name}"] = Ceff * rel
 
     df.to_csv(parameters_csv, index=False)
 
 
-def plot_fit_parameters_dual_axis_for_sample(
+def plot_parameter_bars(
     data_dir,
     circuit_name,
     sample,
-    resistance_columns,
-    capacitance_columns,
-    save_to_png=True,
-    save_to_svg=True,
+    left_columns,
+    left_axis_label,
+    figure_name,
+    mapping,
+    right_columns=None,
+    right_axis_label=None,
+    save_preferences=None,
+    left_ylim=None,
+    right_ylim=None,
+    show_alpha=True,
 ):
-    """
-    data_dir : pathlib Path pointing towards --/eis_fitting/processed/dataset/fits/
-    circuit_name, sample : str
-    resistance_columns / capacitance_columns : arrays of str (typically from get_element_columns)
-    save_to_png/svg : Boolean
-    """
 
     parameters_csv = data_dir / f"eis_fit_parameters_{circuit_name}.csv"
 
@@ -168,496 +177,221 @@ def plot_fit_parameters_dual_axis_for_sample(
 
     df = pd.read_csv(parameters_csv)
 
-    # Keep only selected sample
     df_sample = df[df["sample"] == sample]
 
     if df_sample.empty:
         print(f"Sample '{sample}' not found.")
         return
 
-    # Usually only one row per sample/circuit
     row = df_sample.iloc[0]
-
     sample_name = row["sample"]
 
-    resistance_params = []
-    resistance_values = []
-    resistance_errors = []
+    # ---------------- Mapping ---------------- #
 
-    capacitance_params = []
-    capacitance_values = []
-    capacitance_errors = []
+    display_mapping = {
+        info["name"]: {
+            "colour": info["colour"],
+            "order": info["order"],
+        }
+        for info in mapping.values()
+    }
 
-    # Collect resistance params
-    for param in resistance_columns:
+    # ---------------- Helper to collect plotting data ---------------- #
 
-        if param not in df.columns:
-            print(f"Skipping {param}: not found in dataframe")
-            continue
+    def collect_axis_data(columns):
 
-        value = row[param]
+        axis_data = []
 
-        sd_col = f"SD_{param}"
-        error = row[sd_col] if sd_col in df.columns else 0
+        if columns is None:
+            return axis_data
 
-        if pd.isna(value):
-            continue
+        for param in columns:
 
-        resistance_params.append(param)
-        resistance_values.append(value)
-        resistance_errors.append(error if not pd.isna(error) else 0)
+            if param not in df.columns:
+                continue
 
-    # Collect capacitance params
-    for param in capacitance_columns:
+            value = row[param]
 
-        if param not in df.columns:
-            print(f"Skipping {param}: not found in dataframe")
-            continue
+            if pd.isna(value):
+                continue
 
-        value = row[param]
+            sd_col = f"SD_{param}"
+            error = (
+                row[sd_col] if sd_col in df.columns and not pd.isna(row[sd_col]) else 0
+            )
 
-        sd_col = f"SD_{param}"
-        error = row[sd_col] if sd_col in df.columns else 0
+            order, colour = get_parameter_style(param, display_mapping)
 
-        if pd.isna(value):
-            continue
+            alpha_label = None
 
-        capacitance_params.append(param)
-        capacitance_values.append(value)
-        capacitance_errors.append(error if not pd.isna(error) else 0)
+            alpha_col = get_associated_alpha(param)
 
-    # Nothing to plot error handling
-    if not resistance_params and not capacitance_params:
+            if show_alpha and alpha_col is not None and alpha_col in row.index:
+
+                alpha_value = row[alpha_col]
+
+                if not pd.isna(alpha_value):
+                    alpha_label = fr"$\boldsymbol{{\alpha}}$={alpha_value:.2f}"
+
+            axis_data.append(
+                (
+                    order,
+                    param,
+                    value,
+                    error,
+                    colour,
+                    alpha_label,
+                )
+            )
+
+        axis_data.sort(key=lambda x: x[0])
+
+        return axis_data
+
+    left_data = collect_axis_data(left_columns)
+    right_data = collect_axis_data(right_columns)
+
+    # ---------------- Check ---------------- #
+
+    if not left_data and not right_data:
         print(f"No valid parameters found for {sample_name}")
         return
 
-    # Plot
-    fig, ax_res = plt.subplots(figsize=(8, 5))
+    # ---------------- Unpack ---------------- #
 
-    ax_cap = ax_res.twinx()
+    left_params = [x[1] for x in left_data]
+    left_values = [x[2] for x in left_data]
+    left_errors = [x[3] for x in left_data]
+    left_colours = [x[4] for x in left_data]
+    left_alpha_labels = [x[5] for x in left_data]
 
-    resistance_colours = sns.color_palette(
-        "Reds",
-        n_colors=len(resistance_params) + 2,
-    )[2:]
+    right_params = [x[1] for x in right_data]
+    right_values = [x[2] for x in right_data]
+    right_errors = [x[3] for x in right_data]
+    right_colours = [x[4] for x in right_data]
+    right_alpha_labels = [x[5] for x in right_data]
 
-    capacitance_colours = sns.color_palette(
-        "Blues",
-        n_colors=len(capacitance_params) + 2,
-    )[2:]
+    # ---------------- Plot ---------------- #
 
-    all_params = resistance_params + capacitance_params
+    fig, ax_left = plt.subplots(figsize=(8, 5))
+
+    ax_right = ax_left.twinx() if right_columns is not None else None
+
+    all_params = left_params + right_params
 
     x_positions = np.arange(len(all_params))
+    left_x = np.arange(len(left_params))
+    right_x = np.arange(len(left_params), len(all_params))
 
-    resistance_x = [all_params.index(param) for param in resistance_params]
+    def plot_axis_bars(
+        ax,
+        x_values,
+        values,
+        errors,
+        params,
+        colours,
+        alpha_labels,
+    ):
 
-    capacitance_x = [all_params.index(param) for param in capacitance_params]
-
-    # Resistance bars
-    if resistance_params:
-
-        for i, (
-            xpos,
-            value,
-            error,
-            param,
-        ) in enumerate(
-            zip(
-                resistance_x,
-                resistance_values,
-                resistance_errors,
-                resistance_params,
-            )
+        for xpos, value, error, param, colour, alpha_label in zip(
+            x_values,
+            values,
+            errors,
+            params,
+            colours,
+            alpha_labels,
         ):
 
-            ax_res.bar(
+            ax.bar(
                 xpos,
                 value,
                 yerr=error,
                 width=0.25,
                 capsize=5,
                 alpha=0.9,
-                color=resistance_colours[i],
+                color=colour,
                 edgecolor="black",
                 linewidth=1.2,
                 label=param,
             )
 
-    # Capacitance bars
-    if capacitance_params:
+            if alpha_label is not None:
 
-        for i, (
-            xpos,
-            value,
-            error,
-            param,
-        ) in enumerate(
-            zip(
-                capacitance_x,
-                capacitance_values,
-                capacitance_errors,
-                capacitance_params,
-            )
-        ):
+                y_text = value * 1.03
 
-            ax_cap.bar(
-                xpos,
-                value,
-                yerr=error,
-                width=0.25,
-                capsize=5,
-                alpha=0.9,
-                color=capacitance_colours[i],
-                edgecolor="black",
-                linewidth=1.2,
-                label=param,
-            )
+                if error is not None and not pd.isna(error) and error > 0:
+                    y_text = (value + error) * 1.03
 
-    # Axes formatting
-    ax_res.set_xticks(x_positions)
+                ax.text(
+                    xpos,
+                    y_text,
+                    alpha_label,
+                    ha="center",
+                    va="bottom",
+                    fontsize=14,
+                    color=colour,
+                    fontweight="bold",
+                )
 
-    ax_res.set_xticklabels(
+    plot_axis_bars(
+        ax_left,
+        left_x,
+        left_values,
+        left_errors,
+        left_params,
+        left_colours,
+        left_alpha_labels,
+    )
+
+    if ax_right is not None:
+
+        plot_axis_bars(
+            ax_right,
+            right_x,
+            right_values,
+            right_errors,
+            right_params,
+            right_colours,
+            right_alpha_labels,
+        )
+
+    ax_left.set_xticks(x_positions)
+    ax_left.set_xticklabels(
         all_params,
+        fontsize=14,
         fontweight="bold",
     )
 
-    ax_res.set_ylabel(
-        "Resistance / Ω",
-        color="darkred",
-        fontsize=12,
-        fontweight="bold",
-    )
+    ax_left.set_ylabel(left_axis_label, fontsize=16)
+    ax_left.set_yscale("log")
 
-    ax_cap.set_ylabel(
-        "Capacitance / F",
-        color="darkblue",
-        fontsize=12,
-        fontweight="bold",
-    )
+    if left_ylim is not None:
+        ax_left.set_ylim(*left_ylim)
 
-    ax_res.set_yscale("log")
-    ax_cap.set_yscale("log")
+    if ax_right is not None:
 
-    ax_res.set_ylim(bottom=1e1, top=1e15)
-    ax_cap.set_ylim(bottom=1e-12, top=1e-2)
+        ax_right.set_ylabel(
+            right_axis_label,
+            fontsize=16,
+        )
 
-    ax_res.set_title(f"{sample_name} | {circuit_name}")
+        ax_right.set_yscale("log")
+
+        if right_ylim is not None:
+            ax_right.set_ylim(*right_ylim)
+
+    ax_left.set_title(f"{sample_name} | {circuit_name}")
+
+    axes = {ax_left}
+
+    if ax_right is not None:
+        axes.add(ax_right)
 
     save_fig(
-        save_folder / f"{sample_name}_{circuit_name}_dual_axis_parameters",
+        save_folder / f"{sample_name}_{circuit_name}_{figure_name}",
         fig,
-        {ax_res, ax_cap},
-        save_to_png,
-        save_to_svg,
-    )
-
-
-def plot_Q_and_capacitances(
-    data_dir,
-    circuit_name,
-    sample,
-    q_columns,
-    effective_capacitance_columns,
-    save_to_png=True,
-    save_to_svg=True,
-):
-
-    parameters_csv = data_dir / f"eis_fit_parameters_{circuit_name}.csv"
-
-    save_folder = data_dir / "plots" / sample / "bar_charts"
-    save_folder.mkdir(exist_ok=True, parents=True)
-
-    df = pd.read_csv(parameters_csv)
-
-    df_sample = df[df["sample"] == sample]
-
-    if df_sample.empty:
-        print(f"Sample '{sample}' not found.")
-        return
-
-    row = df_sample.iloc[0]
-
-    q_params = []
-    q_values = []
-    q_errors = []
-
-    ceff_params = []
-    ceff_values = []
-    ceff_errors = []
-
-    # Collect Q values
-    for param in q_columns:
-
-        if param not in df.columns:
-            print(f"Skipping {param}: not found in dataframe")
-            continue
-
-        value = row[param]
-
-        sd_col = f"SD_{param}"
-        error = row[sd_col] if sd_col in df.columns else 0
-
-        if pd.isna(value):
-            continue
-
-        q_params.append(param)
-        q_values.append(value)
-        q_errors.append(error if not pd.isna(error) else 0)
-
-    # Collect effective capacitances
-    for param in effective_capacitance_columns:
-
-        if param not in df.columns:
-            print(f"Skipping {param}: not found in dataframe")
-            continue
-
-        value = row[param]
-
-        sd_col = f"SD_{param}"
-        error = row[sd_col] if sd_col in df.columns else 0
-
-        if pd.isna(value):
-            continue
-
-        ceff_params.append(param)
-        ceff_values.append(value)
-        ceff_errors.append(error if not pd.isna(error) else 0)
-
-    if not q_params and not ceff_params:
-        print(f"No capacitance parameters found for {sample}")
-        return
-
-    # Plot
-    fig, ax_q = plt.subplots(figsize=(8, 5))
-
-    ax_ceff = ax_q.twinx()
-
-    q_colours = sns.color_palette(
-        "Blues",
-        n_colors=len(q_params) + 2,
-    )[2:]
-
-    ceff_colours = sns.color_palette(
-        "Greens",
-        n_colors=len(ceff_params) + 2,
-    )[2:]
-
-    all_params = q_params + ceff_params
-
-    x_positions = np.arange(len(all_params))
-
-    q_x = [all_params.index(param) for param in q_params]
-
-    ceff_x = [all_params.index(param) for param in ceff_params]
-
-    # Q bars
-    for i, (
-        xpos,
-        value,
-        error,
-        param,
-    ) in enumerate(
-        zip(
-            q_x,
-            q_values,
-            q_errors,
-            q_params,
-        )
-    ):
-
-        ax_q.bar(
-            xpos,
-            value,
-            yerr=error,
-            width=0.25,
-            capsize=5,
-            alpha=0.9,
-            color=q_colours[i],
-            edgecolor="black",
-            linewidth=1.2,
-            label=param,
-        )
-
-    # Effective capacitance bars
-    for i, (
-        xpos,
-        value,
-        error,
-        param,
-    ) in enumerate(
-        zip(
-            ceff_x,
-            ceff_values,
-            ceff_errors,
-            ceff_params,
-        )
-    ):
-
-        ax_ceff.bar(
-            xpos,
-            value,
-            yerr=error,
-            width=0.25,
-            capsize=5,
-            alpha=0.9,
-            color=ceff_colours[i],
-            edgecolor="black",
-            linewidth=1.2,
-            label=param,
-        )
-
-    # Formatting
-    ax_q.set_xticks(x_positions)
-
-    ax_q.set_xticklabels(
-        all_params,
-        fontweight="bold",
-    )
-
-    ax_q.set_ylabel(
-        "fitted pseudo-capacitance Q",
-        color="darkblue",
-        fontsize=12,
-        fontweight="bold",
-    )
-
-    ax_ceff.set_ylabel(
-        "Effective capacitance / F",
-        color="darkgreen",
-        fontsize=12,
-        fontweight="bold",
-    )
-
-    ax_q.set_yscale("log")
-    ax_ceff.set_yscale("log")
-
-    ax_q.set_title(f"{sample} | {circuit_name}")
-
-    save_fig(
-        save_folder / f"{sample}_{circuit_name}_Q_and_capacitance",
-        fig,
-        {ax_q, ax_ceff},
-        save_to_png,
-        save_to_svg,
-    )
-
-def plot_conductivities(
-    data_dir,
-    circuit_name,
-    sample,
-    conductivity_columns,
-    save_to_png=True,
-    save_to_svg=True,
-):
-
-    parameters_csv = data_dir / f"eis_fit_parameters_{circuit_name}.csv"
-
-    save_folder = data_dir / "plots" / sample / "bar_charts"
-    save_folder.mkdir(exist_ok=True, parents=True)
-
-    df = pd.read_csv(parameters_csv)
-
-    df_sample = df[df["sample"] == sample]
-
-    if df_sample.empty:
-        print(f"Sample '{sample}' not found.")
-        return
-
-    row = df_sample.iloc[0]
-
-    conductivity_params = []
-    conductivity_values = []
-    conductivity_errors = []
-
-    # Collect conductivity values
-    for param in conductivity_columns:
-
-        if param not in df.columns:
-            print(f"Skipping {param}: not found in dataframe")
-            continue
-
-        value = row[param]
-
-        sd_col = f"SD_{param}"
-        error = row[sd_col] if sd_col in df.columns else 0
-
-        if pd.isna(value):
-            continue
-
-        conductivity_params.append(param)
-        conductivity_values.append(value)
-        conductivity_errors.append(
-            error if not pd.isna(error) else 0
-        )
-
-    if not conductivity_params:
-        print(f"No conductivity parameters found for {sample}")
-        return
-
-    # Plot
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    conductivity_colours = sns.color_palette(
-        "Purples",
-        n_colors=len(conductivity_params) + 2,
-    )[2:]
-
-    x_positions = np.arange(len(conductivity_params))
-
-    # Conductivity bars
-    for i, (
-        xpos,
-        value,
-        error,
-        param,
-    ) in enumerate(
-        zip(
-            x_positions,
-            conductivity_values,
-            conductivity_errors,
-            conductivity_params,
-        )
-    ):
-
-        ax.bar(
-            xpos,
-            value,
-            yerr=error,
-            width=0.25,
-            capsize=5,
-            alpha=0.9,
-            color=conductivity_colours[i],
-            edgecolor="black",
-            linewidth=1.2,
-            label=param,
-        )
-
-    # Formatting
-    ax.set_xticks(x_positions)
-
-    ax.set_xticklabels(
-        conductivity_params,
-        fontweight="bold",
-    )
-
-    ax.set_ylabel(
-        "Conductivity / S.cm$^{-1}$",
-        color="indigo",
-        fontsize=12,
-        fontweight="bold",
-    )
-
-    ax.set_yscale("log")
-
-    ax.set_title(f"{sample} | {circuit_name}")
-
-    save_fig(
-        save_folder / f"{sample}_{circuit_name}_conductivities",
-        fig,
-        {ax},
-        save_to_png,
-        save_to_svg,
+        axes,
+        save_preferences,
     )
 
 
@@ -665,21 +399,22 @@ def plot_conductivities(
 
 
 def eis_analysis(
-    data_dir,
+    input_file,
     CIRCUITS,
     thickness_cm,
     sd_thickness_cm,
     area_cm2,
     sd_area_cm2,
     sigma_omega,
-    save_to_png,
-    save_to_svg,
+    save_preferences=None,
+    plot=False,
 ):
     """
     data_dir : a pathlib PATH pointing towards --/eis_fitting/processed/dataset/fits/
     thickness_cm & area_cm2 : float
-    save_to_png/svg : Boolean
+    save_preferences : dict with keys "png" and "svg" and boolean values
     """
+    data_dir = input_file / "fits/"
 
     for circuit_name in CIRCUITS:
 
@@ -694,51 +429,55 @@ def eis_analysis(
         )
         add_Ceff_columns(circuit_data, sigma_omega)
 
-        plots_path = data_dir / "plots/"
+        if not plot:
+            continue
 
-        for dir_path in plots_path.iterdir():
-            sample = dir_path.name
+        csv_path = input_file / "csv/"
 
-            # excepts the "_all_files" plot
-            if not sample.startswith("_"):
-                dir_path = plots_path / sample
+        for file_path in csv_path.iterdir():
+            sample = file_path.stem
 
-                resistance_columns = get_element_columns(circuit_data, "R")
-                capacitance_columns = get_element_columns(circuit_data, "Ceff")
-                conductivity_columns = get_element_columns(circuit_data, "conductivity")
+            resistance_columns = get_element_columns(circuit_data, "R")
+            capacitance_columns = get_element_columns(circuit_data, "Ceff")
+            conductivity_columns = get_element_columns(circuit_data, "conductivity")
 
-                # get_element_columns also gives n values, hence the condition since Q is "CPE_i_0" and n "CPE_i_1"
-                Q_columns = {
-                    el
-                    for el in get_element_columns(circuit_data, "CPE")
-                    if el.endswith("0")
-                }
-
-                plot_fit_parameters_dual_axis_for_sample(
-                    data_dir,
-                    circuit_name,
-                    sample,
-                    resistance_columns,
-                    capacitance_columns,
-                    save_to_png,
-                    save_to_svg,
-                )
-
-                plot_Q_and_capacitances(
-                    data_dir,
-                    circuit_name,
-                    sample,
-                    Q_columns,
-                    capacitance_columns,
-                    save_to_png,
-                    save_to_svg,
-                )
-
-                plot_conductivities(
-                    data_dir,
-                    circuit_name,
-                    sample,
-                    conductivity_columns,
-                    save_to_png,
-                    save_to_svg,
-                )
+            # get_element_columns also gives n values, hence the condition since Q is "CPE_i_0" and n "CPE_i_1"
+            Q_columns = get_element_columns(circuit_data, "Q")
+            plot_parameter_bars(
+                data_dir=data_dir,
+                circuit_name=circuit_name,
+                sample=sample,
+                left_columns=resistance_columns,
+                right_columns=Q_columns,
+                left_axis_label=r"Resistance ($\Omega$)",
+                right_axis_label=r"Pseudo Capacitance ($F\times s^{\alpha-1}$)",
+                figure_name="R_and_Q",
+                mapping=CIRCUITS[circuit_name]["mapping"],
+                left_ylim=(1e1, 1e15),
+                right_ylim=(1e-12, 1e-2),
+                save_preferences=save_preferences,
+            )
+            plot_parameter_bars(
+                data_dir=data_dir,
+                circuit_name=circuit_name,
+                sample=sample,
+                left_columns=Q_columns,
+                right_columns=capacitance_columns,
+                left_axis_label=r"Pseudo-capacitance Q ($F\times s^{\alpha-1}$)",
+                right_axis_label=r"Effective capacitance ($F$)",
+                figure_name="Q_and_Ceff",
+                mapping=CIRCUITS[circuit_name]["mapping"],
+                left_ylim=(9e-6, 9e-5),
+                save_preferences=save_preferences,
+            )
+            plot_parameter_bars(
+                data_dir=data_dir,
+                circuit_name=circuit_name,
+                sample=sample,
+                left_columns=conductivity_columns,
+                left_axis_label=r"Conductivity ($S.cm^{-1}$)",
+                figure_name="conductivities",
+                mapping=CIRCUITS[circuit_name]["mapping"],
+                left_ylim=(1e-8, 3e-3),
+                save_preferences=save_preferences,
+            )

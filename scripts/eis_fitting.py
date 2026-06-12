@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 from impedance.models.circuits import CustomCircuit
+import shutil
+
+from .utils import save_fig
 
 # ------- Helper functions ------- #
 
@@ -19,55 +22,28 @@ def load_eis_csv(path):
 
     return freq, Z
 
+
 def get_omega_max(input_path):
     # input_folder : pathlib Path to clean csv file
-    
-    # finding omega_max 
+
+    # finding omega_max
     df = pd.read_csv(input_path)
-    
+
     # Clean possible whitespace in column names
     df.columns = df.columns.str.strip()
-    
+
     freq = df["freq/Hz"]
     minus_imag = df["-Im(Z)/Ohm"]
-    
+
     idx_max = minus_imag.idxmax()
     f_max = freq.loc[idx_max]
-    
+
     omega_max = 2 * np.pi * f_max
-    
+
     return omega_max
 
-def save_fig(save_path, fig, axes, save_to_png, save_to_svg):
-    """
-    save_path : pathlib class structured like
-    .../fits/plots/sample_name/sample_name_{circuit_name}_nyquist.png"
 
-    fig : see matplotlib
-    axes : set of matplotlib axes
-    save_to_png/csv : Boolean
-    """
-
-    fig.tight_layout()
-
-    if save_to_png:
-        file_path = save_path.with_suffix(".png")
-        fig.savefig(file_path, format="png", dpi=300)
-    if save_to_svg:
-        file_path = save_path.with_suffix(".svg")
-
-        # transparent background
-        fig.patch.set_alpha(0)
-        # transparent plotting area for each figure
-        for ax in axes:
-            ax.patch.set_alpha(0)
-
-        fig.savefig(file_path, format="svg", transparent=True, dpi=300)
-
-    plt.close(fig)
-
-
-def plot_nyquist_fit(freq, Z, Z_fit, title, save_path, save_to_png, save_to_svg):
+def plot_nyquist_fit(freq, Z, Z_fit, title, save_path, save_preferences):
     fig, ax = plt.subplots(figsize=(9, 5))
 
     ax.plot(
@@ -89,16 +65,16 @@ def plot_nyquist_fit(freq, Z, Z_fit, title, save_path, save_to_png, save_to_svg)
         color="lightskyblue",
     )
 
-    ax.set_xlabel("Re(Z) / Ω", fontsize=12)
-    ax.set_ylabel("-Im(Z) / Ω", fontsize=12)
+    ax.set_xlabel(r"Re(Z) ($\Omega$)", fontsize=14)
+    ax.set_ylabel(r"-Im(Z) ($\Omega$)", fontsize=14)
     ax.set_title(title, fontsize=13)
     ax.margins(x=0.05, y=0.1)
     ax.legend()
 
-    save_fig(save_path, fig, {ax}, save_to_png, save_to_svg)
+    save_fig(save_path, fig, {ax}, save_preferences)
 
 
-def plot_bode_fit(freq, Z, Z_fit, title, save_path, save_to_png, save_to_svg):
+def plot_bode_fit(freq, Z, Z_fit, title, save_path, save_preferences):
 
     zmod = np.abs(Z)
     phase = np.angle(Z, deg=True)
@@ -110,21 +86,21 @@ def plot_bode_fit(freq, Z, Z_fit, title, save_path, save_to_png, save_to_svg):
     axes[0].plot(freq, zmod_fit, "--", label="Fit", color="lightskyblue", linewidth=2)
     axes[0].set_xscale("log")
     axes[0].set_yscale("log")
-    axes[0].set_ylabel("|Z| / Ω")
+    axes[0].set_ylabel(r"|Z| ($\Omega$)", fontsize=14)
     axes[0].legend()
     axes[1].plot(freq, phase, "-", label="Data", color="navy", linewidth=2, alpha=0.7)
     axes[1].plot(freq, phase_fit, "--", label="Fit", color="lightskyblue", linewidth=2)
     axes[1].set_xscale("log")
-    axes[1].set_xlabel("Frequency / Hz")
-    axes[1].set_ylabel("Phase / degrees")
+    axes[1].set_xlabel(r"Frequency ($Hz$)", fontsize=14)
+    axes[1].set_ylabel(r"Phase ($°$)", fontsize=14)
 
     fig.suptitle(title)
 
-    save_fig(save_path, fig, {axes[0], axes[1]}, save_to_png, save_to_svg)
+    save_fig(save_path, fig, {axes[0], axes[1]}, save_preferences)
 
 
 def plot_all_files_for_circuit(
-    fit_data_dict, circuit_name, save_folder, save_to_png, save_to_svg
+    fit_data_dict, circuit_name, save_folder, save_preferences
 ):
     """
     Plot all CSV files on the same Nyquist and Bode plots for one circuit.
@@ -163,18 +139,14 @@ def plot_all_files_for_circuit(
             linewidth=2,
         )
 
-    ax.set_xlabel("Re(Z) / Ω", fontsize=12)
-    ax.set_ylabel("-Im(Z) / Ω", fontsize=12)
+    ax.set_xlabel(r"Re(Z) ($\Omega$)", fontsize=14)
+    ax.set_ylabel(r"-Im(Z) ($\Omega$)", fontsize=14)
     ax.set_title(f"{circuit_name} | Nyquist", fontsize=13)
     ax.margins(x=0.05, y=0.1)
     ax.legend(fontsize=8, bbox_to_anchor=(1.02, 1), loc="upper left")
 
     save_fig(
-        save_folder / f"all_files_{circuit_name}_nyquist",
-        fig,
-        {ax},
-        save_to_png,
-        save_to_svg,
+        save_folder / f"all_files_{circuit_name}_nyquist", fig, {ax}, save_preferences
     )
 
     # ------- Bode plot ------- #
@@ -221,38 +193,43 @@ def plot_all_files_for_circuit(
 
     axes[0].set_xscale("log")
     axes[0].set_yscale("log")
-    axes[0].set_ylabel("|Z| / Ω", fontsize=12)
+    axes[0].set_ylabel(r"|Z| ($\Omega$)", fontsize=14)
     axes[0].legend(fontsize=8, bbox_to_anchor=(1.02, 1), loc="upper left")
     axes[1].set_xscale("log")
-    axes[1].set_xlabel("Frequency / Hz", fontsize=12)
-    axes[1].set_ylabel("Phase / degrees", fontsize=12)
+    axes[1].set_xlabel(r"Frequency ($Hz$)", fontsize=14)
+    axes[1].set_ylabel(r"Phase ($°$)", fontsize=14)
     fig.suptitle(f"{circuit_name} | Bode", fontsize=13)
 
     save_fig(
         save_folder / f"all_files_{circuit_name}_bode.png",
         fig,
         {axes[0], axes[1]},
-        save_to_png,
-        save_to_svg,
+        save_preferences,
     )
 
-def eis_fitting(input_folder, output_folder, CIRCUITS, save_to_png, save_to_svg):
+
+def eis_fitting(input_folder, output_folder, CIRCUITS, save_preferences, plot=False):
     """
-    input_folder : pathlib Path class
-    output_folder : pathlib Path class
+    input_folder : pathlib Path class to the clean csv folder
+    output_folder : pathlib Path class to the folder where fit results + plots will be saved
     CIRCUITS : dictionary following impendance CustomCircuit naming rule
     with the following structure :
         CIRCUITS = {
             "circuit_name": {
             "string": "in naming conventions",
             "guess": [values in the same order as in the string item],
+    mapping : dict {"R_1" : "R_e"}
     },
     """
 
-    plot_folder = output_folder / "plots"
-
+    if output_folder.exists():
+        print(f"Output folder {output_folder} already exists. It will be deleted and recreated.")
+        shutil.rmtree(output_folder)
     output_folder.mkdir(exist_ok=True)
-    plot_folder.mkdir(exist_ok=True)
+
+    if plot:
+        plot_folder = output_folder / "plots"
+        plot_folder.mkdir(exist_ok=True)
 
     # ------- Batch fitting ------- #
     all_results = []
@@ -265,16 +242,20 @@ def eis_fitting(input_folder, output_folder, CIRCUITS, save_to_png, save_to_svg)
         sample_name = csv_path.stem
         print(f"\nFitting: {sample_name}")
 
-        sample_folder_path = plot_folder / sample_name
-        sample_folder_path.mkdir()
+        if plot:
+            sample_folder_path = plot_folder / sample_name
+            sample_folder_path.mkdir()
 
         freq, Z = load_eis_csv(csv_path)
 
         for circuit_name, circuit_info in CIRCUITS.items():
             circuit_string = circuit_info["string"]
             initial_guess = circuit_info["guess"]
+            circuit_mapping = circuit_info["mapping"]
 
             print(f"  Trying circuit: {circuit_name}")
+
+            omega_max = get_omega_max(csv_path)
 
             try:
                 circuit = CustomCircuit(
@@ -295,10 +276,10 @@ def eis_fitting(input_folder, output_folder, CIRCUITS, save_to_png, save_to_svg)
                 }
 
                 param_names = circuit.get_param_names()[0]
+                mapped_names = [circuit_mapping[param]["name"] for param in param_names]
+
                 param_values = circuit.parameters_
 
-                omega_max = get_omega_max(csv_path)
-                                
                 result = {
                     "sample": sample_name,
                     "circuit_name": circuit_name,
@@ -307,11 +288,11 @@ def eis_fitting(input_folder, output_folder, CIRCUITS, save_to_png, save_to_svg)
                     "omega_max": omega_max,
                 }
 
-                for name, value in zip(param_names, param_values):
+                for name, value in zip(mapped_names, param_values):
                     result[name] = value
 
                 if hasattr(circuit, "conf_"):
-                    for name, sd in zip(param_names, circuit.conf_):
+                    for name, sd in zip(mapped_names, circuit.conf_):
                         result[f"SD_{name}"] = sd
                         result[f"{name}_percent_error"] = 100 * sd / result[name]
 
@@ -321,31 +302,32 @@ def eis_fitting(input_folder, output_folder, CIRCUITS, save_to_png, save_to_svg)
 
                 all_results.append(result)
 
-                # Save plots
-                nyquist_path = (
-                    sample_folder_path / f"{sample_name}_{circuit_name}_nyquist"
-                )
-                bode_path = sample_folder_path / f"{sample_name}_{circuit_name}_bode"
+                if plot:
+                    # Save plots
+                    nyquist_path = (
+                        sample_folder_path / f"{sample_name}_{circuit_name}_nyquist"
+                    )
+                    bode_path = (
+                        sample_folder_path / f"{sample_name}_{circuit_name}_bode"
+                    )
 
-                plot_nyquist_fit(
-                    freq,
-                    Z,
-                    Z_fit,
-                    title=f"{sample_name} | {circuit_name}",
-                    save_path=nyquist_path,
-                    save_to_png = save_to_png,
-                    save_to_svg = save_to_svg,
-                )
+                    plot_nyquist_fit(
+                        freq,
+                        Z,
+                        Z_fit,
+                        title=f"{sample_name} | {circuit_name}",
+                        save_path=nyquist_path,
+                        save_preferences=save_preferences,
+                    )
 
-                plot_bode_fit(
-                    freq,
-                    Z,
-                    Z_fit,
-                    title=f"{sample_name} | {circuit_name}",
-                    save_path=bode_path,
-                    save_to_png = save_to_png,
-                    save_to_svg = save_to_svg,
-                )
+                    plot_bode_fit(
+                        freq,
+                        Z,
+                        Z_fit,
+                        title=f"{sample_name} | {circuit_name}",
+                        save_path=bode_path,
+                        save_preferences=save_preferences,
+                    )
 
             except Exception as e:
                 print(f"    Fit failed: {e}")
@@ -357,22 +339,22 @@ def eis_fitting(input_folder, output_folder, CIRCUITS, save_to_png, save_to_svg)
                         "circuit_string": circuit_string,
                         "fit_success": False,
                         "error": str(e),
-                        "omega_max" : omega_max,
+                        "omega_max": omega_max,
                     }
                 )
 
-    for circuit_name, fit_data_dict in all_fit_data.items():
-        if fit_data_dict:
-            plot_all_folder = plot_folder / "_all_files"
-            plot_all_folder.mkdir(exist_ok=True)
+    if plot and len(csv_files) > 1:
+        for circuit_name, fit_data_dict in all_fit_data.items():
+            if fit_data_dict:
+                plot_all_folder = plot_folder / "_all_files"
+                plot_all_folder.mkdir(exist_ok=True)
 
-            plot_all_files_for_circuit(
-                fit_data_dict=fit_data_dict,
-                circuit_name=circuit_name,
-                save_folder=plot_all_folder,
-                save_to_png = save_to_png,
-                save_to_svg = save_to_svg,
-            )
+                plot_all_files_for_circuit(
+                    fit_data_dict=fit_data_dict,
+                    circuit_name=circuit_name,
+                    save_folder=plot_all_folder,
+                    save_preferences=save_preferences,
+                )
 
     # Save summary tables
     results_df = pd.DataFrame(all_results)
