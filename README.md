@@ -265,7 +265,6 @@ data/
                 ├── sample_01.mpr
                 ├── sample_02.mpr
                 └── ...
-
 ```
 > NB : mpr files can contain multiple frenquencies sweep in a raw thanks to the *split_non_monotonic_frequency_csv* in **scripts/eis_preprocess**
 > ⚠️ sample's name **MUST NOT** contain full stops : instead of *"P2U1.2"* use *"P2U1_2"* otherwise everything after the full stop will be read as an extension and won't be processed.
@@ -377,25 +376,24 @@ Outputs:
 ## Processed folder structure
 
 ```text
-.
-├─── processed 
-│    ├─── experiment_1                                       # see below for recommended naming conventions
-│    |    ├─── csv                                           # clean csv data
-│    |    ├─── fits                                          
-│    |    │    ├─── plots                                    
-│    |    │    │    ├─── sample_1                               
-│    |    │    |    |    ├─── circuit 1                      # Bode, Nyquist and parameter bar charts
-│    .    │    |    .    .
-│    .    │    |    .    └             
-│    │    │    │    └─── all_runs                            # Bode and Nyquist plots                   
-│    |    │    ├─── eis_fit_parameters_circuit_1.csv         
-│    |    .    .
-│    |    .    .
-│    |    │    └─── eis_fit_parameters_all_circuits.csv      
-└    └    └ 
+eis_fitting
+├─── processed/ 
+|    ├─── <person>/
+│         ├─── <experiment>/                                      # see below for recommended naming conventions
+│         |    ├─── csv/                                          # clean csv data
+│         |    ├─── fits/                                        
+│         |    │    ├─── plots/                                    
+│         |    │    │    ├─── sample_1/                               
+│         |    │    |    |    ├─── circuit 1                      # Bode, Nyquist and parameter bar charts
+│         .    │    |    .    .
+│         .    │    |    .    └             
+│         │    │    │    └─── all_runs/                           # Bode and Nyquist plots                   
+│         |    │    ├─── eis_fit_parameters_circuit_1.csv         
+│         |    .    .
+│         |    .    .
+│         |    │    └─── eis_fit_parameters_all_circuits.csv      
+└         └    └ 
 ```
-
-Naming conventions for data folder : INITIALS_experiment-name_date
 
 ---
 

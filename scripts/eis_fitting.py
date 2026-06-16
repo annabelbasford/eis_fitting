@@ -212,7 +212,7 @@ def eis_fitting(input_folder, output_folder, CIRCUITS, save_preferences, plot=Fa
     """
     input_folder : pathlib Path class to the clean csv folder
     output_folder : pathlib Path class to the folder where fit results + plots will be saved
-    CIRCUITS : dictionary following impendance CustomCircuit naming rule
+    CIRCUITS : dictionary following impedance CustomCircuit naming rule
     with the following structure :
         CIRCUITS = {
             "circuit_name": {
@@ -255,8 +255,6 @@ def eis_fitting(input_folder, output_folder, CIRCUITS, save_preferences, plot=Fa
 
             print(f"  Trying circuit: {circuit_name}")
 
-            omega_max = get_omega_max(csv_path)
-
             try:
                 circuit = CustomCircuit(
                     circuit=circuit_string,
@@ -285,7 +283,6 @@ def eis_fitting(input_folder, output_folder, CIRCUITS, save_preferences, plot=Fa
                     "circuit_name": circuit_name,
                     "circuit_string": circuit_string,
                     "fit_success": True,
-                    "omega_max": omega_max,
                 }
 
                 for name, value in zip(mapped_names, param_values):
@@ -339,7 +336,6 @@ def eis_fitting(input_folder, output_folder, CIRCUITS, save_preferences, plot=Fa
                         "circuit_string": circuit_string,
                         "fit_success": False,
                         "error": str(e),
-                        "omega_max": omega_max,
                     }
                 )
 

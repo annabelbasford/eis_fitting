@@ -428,7 +428,6 @@ def eis_analysis(
     sd_thickness_cm,
     area_cm2,
     sd_area_cm2,
-    sigma_omega,
     save_preferences=None,
     plot=False,
 ):
@@ -450,7 +449,6 @@ def eis_analysis(
             area_cm2,
             sd_area_cm2,
         )
-        add_Ceff_columns(circuit_data, sigma_omega)
 
         if not plot:
             continue
@@ -480,19 +478,7 @@ def eis_analysis(
                 right_ylim=(1e-12, 1e-2),
                 save_preferences=save_preferences,
             )
-            """plot_parameter_bars(
-                data_dir=data_dir,
-                circuit_name=circuit_name,
-                sample=sample,
-                left_columns=Q_columns,
-                right_columns=capacitance_columns,
-                left_axis_label=r"Pseudo-capacitance Q ($F\times s^{\alpha-1}$)",
-                right_axis_label=r"Effective capacitance ($F$)",
-                figure_name="Q_and_Ceff",
-                mapping=CIRCUITS[circuit_name]["mapping"],
-                left_ylim=(1e-7, 1e-5),
-                save_preferences=save_preferences,
-            )"""
+
             plot_parameter_bars(
                 data_dir=data_dir,
                 circuit_name=circuit_name,

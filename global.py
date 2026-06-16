@@ -5,7 +5,7 @@ from scripts.eis_analysis import eis_analysis
 import json
 import shutil
 
-person = "dryshia"
+person = "femke"
 
 project = "EIS_hydrogels"
 
@@ -129,7 +129,7 @@ for dir_name in s_data:
     profile_name = metadata["profile"]
     circuits_to_try = metadata["circuits"]
 
-    with open(DATA_ROOT / f"profiles/{profile_name}.json", "r", encoding="utf-8") as f:
+    with open(DATA_ROOT / f"_methods/{profile_name}.json", "r", encoding="utf-8") as f:
         profile = json.load(f)
 
     geometry = profile["geometry"]
@@ -189,7 +189,6 @@ for dir_name in s_data:
             sd_thickness_cm,
             area_cm2,
             sd_area_cm2,
-            sigma_omega=0,
-            save_preferences=save_preferences,
-            plot=plot,
+            save_preferences,
+            plot,
         )
