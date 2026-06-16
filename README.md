@@ -261,13 +261,11 @@ data/
     └── <project>/
         └── <experiment>/
             ├── metadata.json
-            ├── raw/
-            │   ├── sample_01.mpr
-            │   ├── sample_02.mpr
-            │   └── ...
-            ├── processed/
-            ├── fits/
-            └── plots/
+            └── raw/
+                ├── sample_01.mpr
+                ├── sample_02.mpr
+                └── ...
+
 ```
 > NB : mpr files can contain multiple frenquencies sweep in a raw thanks to the *split_non_monotonic_frequency_csv* in **scripts/eis_preprocess**
 > ⚠️ sample's name **MUST NOT** contain full stops : instead of *"P2U1.2"* use *"P2U1_2"* otherwise everything after the full stop will be read as an extension and won't be processed.
