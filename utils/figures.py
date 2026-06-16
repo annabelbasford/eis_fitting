@@ -1,0 +1,42 @@
+import matplotlib.pyplot as plt
+
+
+class FigureSaver:
+    def __init__(self, save_preferences: dict):
+        self.save_preferences = save_preferences
+
+    def save(self, save_path, fig, axes):
+        save_to_png = self.save_preferences.get("png", True)
+        save_to_svg = self.save_preferences.get("svg", False)
+        transparent = self.save_preferences.get("transparent", False)
+
+        try:
+            fig.tight_layout()
+        except Exception:
+            pass
+
+        if transparent:
+            fig.patch.set_alpha(0)
+
+            for ax in axes:
+                ax.patch.set_alpha(0)
+
+        if save_to_png:
+            fig.savefig(
+                save_path.with_suffix(".png"),
+                format="png",
+                transparent=transparent,
+                dpi=300,
+                bbox_inches="tight",
+            )
+
+        if save_to_svg:
+            fig.savefig(
+                save_path.with_suffix(".svg"),
+                format="svg",
+                transparent=transparent,
+                dpi=300,
+                bbox_inches="tight",
+            )
+
+        plt.close(fig)
