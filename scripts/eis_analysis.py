@@ -9,9 +9,19 @@ from .utils import save_fig
 # ------- Style functions ------- #
 
 
-def lighten_colour(colour, factor=0.2):
+def adjust_colour(colour, factor=0.2):
+    """
+    factor > 0 : lighten
+    factor < 0 : darken
+    """
+
     rgb = np.array(to_rgb(colour))
-    rgb = rgb + (1 - rgb) * factor
+
+    if factor >= 0:
+        rgb = rgb + (1 - rgb) * factor
+    else:
+        rgb = rgb * (1 + factor)
+
     return to_hex(rgb)
 
 
@@ -45,7 +55,7 @@ def get_parameter_style(param, display_mapping):
     order = style.get("order", float("inf"))
 
     if is_derived:
-        colour = lighten_colour(colour, factor=0.35)
+        colour = adjust_colour(colour, factor=-0.35)
 
     return order, colour
 
@@ -229,9 +239,22 @@ def plot_parameter_bars(
             if show_alpha and alpha_col is not None and alpha_col in row.index:
 
                 alpha_value = row[alpha_col]
-
+            
                 if not pd.isna(alpha_value):
-                    alpha_label = fr"$\boldsymbol{{\alpha}}$={alpha_value:.2f}"
+                
+                    sd_alpha_col = f"SD_{alpha_col}"
+            
+                    if sd_alpha_col in row.index and not pd.isna(row[sd_alpha_col]):
+                        sd_alpha = row[sd_alpha_col]
+                        alpha_label = (
+                            fr"$\boldsymbol{{\alpha}}$="
+                            f"{alpha_value:.3f}"
+                            "\n"
+                            fr"$\boldsymbol{{\pm}}$"
+                            f"{sd_alpha:.3f}"
+                        )
+                    else:
+                        alpha_label = fr"$\boldsymbol{{\alpha}}$={alpha_value:.3f}"
 
             axis_data.append(
                 (
@@ -328,7 +351,7 @@ def plot_parameter_bars(
                     alpha_label,
                     ha="center",
                     va="bottom",
-                    fontsize=14,
+                    fontsize=12,
                     color=colour,
                     fontweight="bold",
                 )
@@ -457,7 +480,7 @@ def eis_analysis(
                 right_ylim=(1e-12, 1e-2),
                 save_preferences=save_preferences,
             )
-            plot_parameter_bars(
+            """plot_parameter_bars(
                 data_dir=data_dir,
                 circuit_name=circuit_name,
                 sample=sample,
@@ -467,9 +490,9 @@ def eis_analysis(
                 right_axis_label=r"Effective capacitance ($F$)",
                 figure_name="Q_and_Ceff",
                 mapping=CIRCUITS[circuit_name]["mapping"],
-                left_ylim=(9e-6, 9e-5),
+                left_ylim=(1e-7, 1e-5),
                 save_preferences=save_preferences,
-            )
+            )"""
             plot_parameter_bars(
                 data_dir=data_dir,
                 circuit_name=circuit_name,

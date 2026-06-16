@@ -30,27 +30,26 @@ CIRCUITS = {
         "mapping": {
             "R_1": {
                 "name": "R_i",
-                "colour": "#1f77b4",
+                "colour": "#80D4F8",
                 "order": 0,
             },
             "R_2": {
                 "name": "R_e",
-                "colour": "#d51613",
+                "colour": "#F37F8C",
                 "order": 1,
             },
             "CPE_1_0": {
                 "name": "Q_DL",
-                "colour": "#af1fb4",
+                "colour": "#7C84C2",
                 "order": 0,
             },
             "CPE_1_1": {
                 "name": "alpha_DL",
-                "colour": "#901994",
+                "colour": "#7C84C2",
                 "order": 0,
             },
         },
     },
-
     "circuit_2": {
         "string": "R_1-p(R_3-CPE_1,CPE_2,R_2)",
         "guess": [
@@ -65,37 +64,37 @@ CIRCUITS = {
         "mapping": {
             "R_1": {
                 "name": "R_c",
-                "colour": "#2ca02c",
+                "colour": "#69BC86",
                 "order": 2,
             },
             "R_3": {
                 "name": "R_i",
-                "colour": "#1f77b4",
+                "colour": "#80D4F8",
                 "order": 0,
             },
             "R_2": {
                 "name": "R_e",
-                "colour": "#d51613",
+                "colour": "#F37F8C",
                 "order": 1,
             },
             "CPE_1_0": {
                 "name": "Q_DL",
-                "colour": "#af1fb4",
+                "colour": "#7C84C2",
                 "order": 0,
             },
             "CPE_2_0": {
                 "name": "Q_g",
-                "colour": "#ff7f0e",
+                "colour": "#F49A80",
                 "order": 1,
             },
             "CPE_1_1": {
                 "name": "alpha_DL",
-                "colour": "#901994",
+                "colour": "#7C84C2",
                 "order": 0,
             },
             "CPE_2_1": {
                 "name": "alpha_g",
-                "colour": "#dc6d0d",
+                "colour": "#F49A80",
                 "order": 1,
             },
         },
@@ -103,7 +102,7 @@ CIRCUITS = {
 }
 
 # data folders that shouldn't be processed
-exceptFolders_preprocess = {"mpr", "juan", "femke"}
+exceptFolders_preprocess = {"mpr", "femke", "testFemke", "juan"}
 
 for dir_name in s_data:
 
@@ -123,7 +122,7 @@ for dir_name in s_data:
 
     run = metadata.get("run", {})
 
-    pre_plot = run.get("pre_plot", False) 
+    pre_plot = run.get("pre_plot", False)
     plot = run.get("plot", True)
 
     thickness_cm = metadata["thickness_cm"]
@@ -135,21 +134,22 @@ for dir_name in s_data:
     circuits_to_try = metadata["circuits"]
 
     circuits_for_dataset = {
-        key: value
-        for key, value in CIRCUITS.items()
-        if key in circuits_to_try
+        key: value for key, value in CIRCUITS.items() if key in circuits_to_try
     }
 
     # ------- Data pre-processing ------- #
-    if dir_name not in s_processed:
+    if dir_name not in s_processed or pre_plot:
 
         print(f"Processing {dir_name} dataset")
 
         PROCESSED_DATASET_FOLDER.mkdir(exist_ok=True)
 
-        eis_metrohm_data_clean(DATASET, CLEAN_CSV_FOLDER)
-        eis_mpr_data_conversion(DATASET, CLEAN_CSV_FOLDER)
-        split_non_monotonic_frequency_csv(CLEAN_CSV_FOLDER)
+        if PRE_PLOT_FOLDER.exists():
+            shutil.rmtree(PRE_PLOT_FOLDER)
+        else:
+            eis_metrohm_data_clean(DATASET, CLEAN_CSV_FOLDER)
+            eis_mpr_data_conversion(DATASET, CLEAN_CSV_FOLDER)
+            split_non_monotonic_frequency_csv(CLEAN_CSV_FOLDER)
 
         if pre_plot:
             eis_preprocess_plot(CLEAN_CSV_FOLDER, PRE_PLOT_FOLDER)
@@ -173,7 +173,7 @@ for dir_name in s_data:
 
         print("Data fitted")
 
-    # ------- Analysis ------- #
+        # ------- Analysis ------- #
         eis_analysis(
             PROCESSED_DATASET_FOLDER,
             circuits_for_dataset,
