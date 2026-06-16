@@ -5,16 +5,28 @@ from scripts.eis_analysis import eis_analysis
 import json
 import shutil
 
+person = "dryshia"
+
+project = "EIS_hydrogels"
+
+pre_plot = False
+plot = True
+
 # Convention : paths in caps
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-DATA = PROJECT_ROOT / "data"
-PROCESSED = PROJECT_ROOT / "projects/eis_fitting/processed"
+DATA_ROOT = PROJECT_ROOT / "data"
 
-PROCESSED.mkdir(exist_ok=True)
+DATA = DATA_ROOT / person / project
+
+PROCESSED = PROJECT_ROOT / f"projects/eis_fitting/processed/{person}/{project}"
+
+PROCESSED.mkdir(exist_ok=True, parents=True)
 
 s_data = {el.name for el in DATA.iterdir() if el.is_dir()}
+
+# list of experiments that have already been processed
 s_processed = {el.name for el in PROCESSED.iterdir() if el.is_dir()}
 
 # Dictionary of circuits that the fitting process will try based on metadata
@@ -101,13 +113,7 @@ CIRCUITS = {
     },
 }
 
-# data folders that shouldn't be processed
-exceptFolders_preprocess = {"mpr", "femke", "testFemke", "juan"}
-
 for dir_name in s_data:
-
-    if dir_name in exceptFolders_preprocess:
-        continue
 
     # ------- Path handling ------- #
     PROCESSED_DATASET_FOLDER = PROCESSED / dir_name
@@ -120,18 +126,20 @@ for dir_name in s_data:
     with open(DATASET / "metadata.json", "r", encoding="utf-8") as f:
         metadata = json.load(f)
 
-    run = metadata.get("run", {})
-
-    pre_plot = run.get("pre_plot", False)
-    plot = run.get("plot", True)
-
-    thickness_cm = metadata["thickness_cm"]
-    sd_thickness_cm = metadata["SD_thickness_cm"]
-    area_cm2 = metadata["area_cm2"]
-    sd_area_cm2 = metadata["SD_area_cm2"]
-    save_preferences = metadata["save_preferences"]
-    sigma_omega = metadata["sigma_f"] * 2 * np.pi
+    profile_name = metadata["profile"]
     circuits_to_try = metadata["circuits"]
+
+    with open(DATA_ROOT / f"profiles/{profile_name}.json", "r", encoding="utf-8") as f:
+        profile = json.load(f)
+
+    geometry = profile["geometry"]
+
+    thickness_cm = geometry["thickness_cm"]
+    sd_thickness_cm = geometry["SD_thickness_cm"]
+    area_cm2 = geometry["area_cm2"]
+    sd_area_cm2 = geometry["SD_area_cm2"]
+
+    save_preferences = profile["save_preferences"]
 
     circuits_for_dataset = {
         key: value for key, value in CIRCUITS.items() if key in circuits_to_try
@@ -181,7 +189,7 @@ for dir_name in s_data:
             sd_thickness_cm,
             area_cm2,
             sd_area_cm2,
-            sigma_omega,
-            save_preferences,
-            plot,
+            sigma_omega=0,
+            save_preferences=save_preferences,
+            plot=plot,
         )

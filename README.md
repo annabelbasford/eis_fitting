@@ -214,44 +214,6 @@ The workflow assumes that:
 ---
 ---
 
-# Repository Structure
-
-## Recommended general structure
-
-```text
-.
-├── data  
-│   ├─── experiment_1                                        # experimental data folder (.mpr or metrohm csv)
-│   └─── ...                                                 
-├── projects                                                  
-│   └─── eis_fitting                                         
-│        ├─── global.py                                      # main script calling functions from scripts/
-│        ├─── scripts                                        # contains preprocessing, fitting and analysis scripts
-│        └─── processed                                      
-│             ├─── experiment_1                              # see subsection "Output Folder structure"
-│             └─── ...
-└  
-```
-
-> NB : you can use your own architecture by changing the **PROJECT_ROOT** path in `global.py`
-
-## Experimental data folder structure
-
-```text
-.
-├── experiment_1
-|   ├─── metrohm_raw_data.csv
-|   ├─── raw_data_run1.mpr
-|   .
-|   .
-|   └─── metadata.json                                       # see "Usage" section
-└ 
-```
-> NB : mpr files can contain multiple frenquencies sweep in a raw thanks to the *split_non_monotonic_frequency_csv* in **scripts/eis_preprocess**
-> ⚠️ sample's name **MUST NOT** contain full stops : instead of *"P2U1.2"* use *"P2U1_2"* otherwise everything after the full stop will be read as an extension and won't be processed.
-
----
-
 # Installation
 
 ## Clone the repository
@@ -282,57 +244,117 @@ pip install numpy pandas matplotlib seaborn impedance galvani
 
 ---
 
-# Usage
+## Usage
 
-Before trying to run the code, make sure your environment is ordered like shown in section "Recommended general Structure"
+### 1. Organise your data
 
-## 1. Make sure your data folder is properly ordered (see "Experimental data folder" subsection)  
+Experiments are organised by **user**, **project**, and **experiment**.
 
-`metadata.json` file template 
+```
+data/
+│
+├── profiles/
+│   ├── conductive_hydrogel.json
+│   └── ...
+│
+└── <person>/
+    └── <project>/
+        └── <experiment>/
+            ├── metadata.json
+            ├── raw/
+            │   ├── sample_01.mpr
+            │   ├── sample_02.mpr
+            │   └── ...
+            ├── processed/
+            ├── fits/
+            └── plots/
+```
+> NB : mpr files can contain multiple frenquencies sweep in a raw thanks to the *split_non_monotonic_frequency_csv* in **scripts/eis_preprocess**
+> ⚠️ sample's name **MUST NOT** contain full stops : instead of *"P2U1.2"* use *"P2U1_2"* otherwise everything after the full stop will be read as an extension and won't be processed.
+
+---
+
+### 2. Create a profile
+
+Profiles contain the default configuration shared by a class of experiments, such as sample geometry, processing parameters and output preferences.
+
+Example:
+
 ```json
 {
-    "thickness_cm": 0.1,
-    "SD_thickness_cm": 0.01,
-    "area_cm2": 1.0,
-    "SD_area_cm2": 0.2,
-    "run": {
-        "pre_plot": false,
-        "plot": true
+    "geometry": {
+        "thickness_cm": 0.10,
+        "SD_thickness_cm": 0.01,
+        "area_cm2": 1.00,
+        "SD_area_cm2": 0.20
     },
+
     "save_preferences": {
         "transparent": false,
         "png": true,
         "svg": false
-    },
-    "sigma_f": 20,
-    "circuits": [
-        "circuit_1",
-        "circuit_2"
-    ],
-    "description": "w/v PEDOT:PSS : ..."
+    }
 }
 ```
-### Metadata options
 
-| Key | Description |
-|------|-------------|
-| `thickness_cm` | Sample thickness (cm). |
-| `SD_thickness_cm` | Standard deviation of the thickness (cm). |
-| `area_cm2` | Electrode area (cm²). |
-| `SD_area_cm2` | Standard deviation of the electrode area (cm²). |
-| `run.pre_plot` | If `true`, generates raw Bode plots after preprocessing and stops before fitting to allow manual outlier removal. |
-| `run.plot` | Enables generation of Nyquist, Bode and parameter plots during fitting and analysis. |
-| `save_preferences.transparent` | Save figures with a transparent background. |
-| `save_preferences.png` | Save figures as PNG. |
-| `save_preferences.svg` | Save figures as SVG. |
-| `sigma_f` | Estimated uncertainty (Hz) on the frequency at which \(-Im(Z)\) is maximum. Used for effective capacitance uncertainty propagation. |
-| `circuits` | List of equivalent circuits to fit. |
+---
 
-> If `pre_plot` is set to true the bare Bode plot will be plotted to allow user to spot outliers and correct the clean /processed/experiment/csv/sample.csv file : fitting will not proceed
-> `plot` parameter has an important impact on the efficiency of the script. If one is only interested in getting the raw parameters of the fitting we highly advise setting this parameter to **false**
-> sigma_f, in Hz, should reflect how precisely the frequency at which -Im(Z) is maximum can be determined
+### 3. Configure an experiment
 
-## 2. If need be, fill in the expectFolders set
+Each experiment contains a `metadata.json` file that references a profile and specifies experiment-specific settings.
+
+Example:
+
+```json
+{
+    "profile": "conductive_hydrogel",
+
+    "description": "PEDOT:PSS hydrogel with 10 wt% glycerol",
+
+    "circuits": [
+        "circuit_1"
+    ]
+}
+```
+
+Only settings that vary between experiments need to be stored here.
+
+---
+
+### 4. Select the project
+
+In `global.py` (or your configuration script), specify the person and project to analyse:
+
+```python
+person = "enzo"
+project = "EIS_hydrogels"
+```
+
+The pipeline will automatically search
+_
+```
+data/enzo/EIS_hydrogels/
+```
+
+and process each experiment contained within that project.
+
+> You can also use the `pre_plot` and `plot` parameters if you need to plot the bare Bode plots and remove outliers by hand for the first parameter, or to specify whether the script should plot the results or only giv the fitted parameters in *csv* files.
+
+---
+
+### 5. Run the pipeline
+
+```bash
+python global.py
+```
+
+Each experiment is processed independently, with results written to its own
+
+- `processed/`
+- `fits/`
+- `plots/`
+
+directories.
 
 # Example Output
 

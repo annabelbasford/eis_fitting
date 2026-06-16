@@ -4,6 +4,7 @@ __pycache__/
 *.pyd
 
 _test.py
+processed/
 
 .env
 venv/
