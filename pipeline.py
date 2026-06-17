@@ -7,6 +7,8 @@ from eis_fitting.fitting.fitter import EISFitter
 from eis_fitting.analysis.analyser import EISAnalyser
 from eis_fitting.plotting.plotter import AnalysisPlotter
 
+from tqdm import tqdm
+
 
 class EISPipeline:
     def __init__(
@@ -43,17 +45,30 @@ class EISPipeline:
         print(f"Input folder: {experiment.paths.input}")
         print(f"Processed output: {experiment.paths.processed_root}")
 
-        if experiment.run.get("preprocess", True):
+        # Preprocesses the data if it doesn't already have a processed folder
+        # or if preplot was required. In which case, no fitting nor analysis will happen afterwards
+        if not experiment.paths.processed_root.is_dir() or experiment.run.get(
+            "pre_plot", True
+        ):
             EISPreprocessor().run(experiment)
 
-        if experiment.run.get("fit", True):
+        # only proceeds if no pre_plotting was required and "fits" folder is empty (it's already created in EISPreprocessor)
+        print(not experiment.run.get("pre_plot", True))
+        print(not any(experiment.paths.fits.iterdir()))
+        print(not experiment.run.get("pre_plot", True)
+            and not any(experiment.paths.fits.iterdir()))
+        if (
+            not experiment.run.get("pre_plot", True)
+            and not any(experiment.paths.fits.iterdir())
+        ):
+            # note that the Bode and Nyquist plotting in EISFitter does
+            # check the experiment.run.get("plot") during it's execution
             EISFitter(self.circuits).run(experiment)
 
-        if experiment.run.get("analyse", True):
             EISAnalyser(self.circuits).run(experiment)
 
-        if experiment.run.get("plot", True):
-            AnalysisPlotter(self.circuits).run(experiment)
+            if experiment.run.get("plot", True):
+                AnalysisPlotter(self.circuits).run(experiment)
 
     def run_project(self, person: str, project: str) -> None:
         project_path = self.data_root / person / project
@@ -61,7 +76,7 @@ class EISPipeline:
         if not project_path.exists():
             raise FileNotFoundError(f"Project folder not found: {project_path}")
 
-        for experiment_path in sorted(project_path.iterdir()):
+        for experiment_path in tqdm(sorted(project_path.iterdir()), unit="sample"):
             if not experiment_path.is_dir():
                 continue
 

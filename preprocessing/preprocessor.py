@@ -3,9 +3,9 @@ from pathlib import Path
 import glob
 import matplotlib.pyplot as plt
 import pandas as pd
+import shutil
 
 from eis_fitting.io.readers import BioLogicConverter
-
 
 class MetrohmCSVCleaner:
     SECTION_MAP = {
@@ -175,7 +175,6 @@ class FrequencySplitter:
             if current_trend != trend:
                 segments.append(df.iloc[start_idx:i].copy())
                 start_idx = i
-                trend = current_trend
 
         if start_idx == 0:
             return
@@ -247,19 +246,22 @@ class EISPreprocessor:
         mpr_files = list(input_folder.glob("*.mpr"))
         csv_files = list(input_folder.glob("*.csv"))
 
-        if mpr_files:
-            self.biologic_converter.convert_folder(
-                input_folder,
-                csv,
-            )
-
-        if csv_files:
-            self.metrohm_cleaner.clean_folder(
-                input_folder,
-                csv,
-            )
-
-        self.frequency_splitter.split_folder(csv)
+        if experiment.paths.pre_plots.is_dir():
+            shutil.rmtree(experiment.paths.pre_plots)
+        else :
+            if mpr_files:
+                self.biologic_converter.convert_folder(
+                    input_folder,
+                    csv,
+                )
+    
+            if csv_files:
+                self.metrohm_cleaner.clean_folder(
+                    input_folder,
+                    csv,
+                )
+    
+            self.frequency_splitter.split_folder(csv)
 
         if experiment.run.get("pre_plot", False):
             self.preview_plotter.plot_folder(

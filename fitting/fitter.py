@@ -7,6 +7,8 @@ import pandas as pd
 import seaborn as sns
 from impedance.models.circuits import CustomCircuit
 
+import warnings
+
 from eis_fitting.io.readers import EISCSVReader
 from eis_fitting.utils.figures import FigureSaver
 
@@ -155,9 +157,10 @@ class EISFitter:
 
     def run(self, experiment) -> None:
         output_folder = experiment.paths.fits
+        pre_plot_folder = experiment.paths.pre_plots
 
-        if output_folder.exists():
-            shutil.rmtree(output_folder)
+        if pre_plot_folder.is_dir():
+            shutil.rmtree(pre_plot_folder)
 
         output_folder.mkdir(parents=True, exist_ok=True)
 
@@ -193,7 +196,6 @@ class EISFitter:
                 sample_plot_folder.mkdir(parents=True, exist_ok=True)
 
             freq, z = self.reader.read_impedance(csv_path)
-            omega_max = self.reader.omega_max(csv_path)
 
             for circuit_name, circuit_info in circuits_to_fit.items():
                 result = self._fit_one(
@@ -202,7 +204,6 @@ class EISFitter:
                     circuit_info=circuit_info,
                     freq=freq,
                     z=z,
-                    omega_max=omega_max,
                 )
 
                 all_results.append(result["row"])
@@ -245,9 +246,9 @@ class EISFitter:
                         all_plot_folder,
                     )
 
-        self._save_results(all_results, output_folder, circuits_to_fit)
+        self._save_results(all_results, output_folder, circuits_to_fit, experiment)
 
-    def _fit_one(self, sample_name, circuit_name, circuit_info, freq, z, omega_max):
+    def _fit_one(self, sample_name, circuit_name, circuit_info, freq, z):
         circuit_string = circuit_info["string"]
         initial_guess = circuit_info["guess"]
         circuit_mapping = circuit_info["mapping"]
@@ -261,7 +262,10 @@ class EISFitter:
                 name=circuit_name,
             )
 
-            circuit.fit(freq, z, weight_by_modulus=True)
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", message="Covariance computation failed")
+                circuit.fit(freq, z, weight_by_modulus=True)
+
             z_fit = circuit.predict(freq)
 
             param_names = circuit.get_param_names()[0]
@@ -272,7 +276,6 @@ class EISFitter:
                 "circuit_name": circuit_name,
                 "circuit_string": circuit_string,
                 "fit_success": True,
-                "omega_max": omega_max,
             }
 
             for name, value in zip(mapped_names, circuit.parameters_):
@@ -303,13 +306,12 @@ class EISFitter:
                     "circuit_name": circuit_name,
                     "circuit_string": circuit_string,
                     "fit_success": False,
-                    "omega_max": omega_max,
                     "error": str(exc),
                 },
                 "z_fit": None,
             }
 
-    def _save_results(self, all_results, output_folder, circuits_to_fit):
+    def _save_results(self, all_results, output_folder, circuits_to_fit, experiment):
         results_df = pd.DataFrame(all_results)
 
         if results_df.empty:
@@ -320,7 +322,6 @@ class EISFitter:
             "circuit_name",
             "circuit_string",
             "fit_success",
-            "omega_max",
         ]
 
         ordered_columns = [col for col in base_columns if col in results_df.columns]
@@ -357,13 +358,10 @@ class EISFitter:
         ordered_columns.extend(remaining_cols)
         results_df = results_df[ordered_columns]
 
-        combined_csv = output_folder / "eis_fit_parameters_all_circuits.csv"
-        results_df.to_csv(combined_csv, index=False, float_format="%.6g")
-
         for circuit_name in circuits_to_fit:
             circuit_df = results_df[
                 results_df["circuit_name"] == circuit_name
             ].copy()
 
-            circuit_csv = output_folder / f"eis_fit_parameters_{circuit_name}.csv"
+            circuit_csv = output_folder / f"{experiment.name}_{circuit_name}.csv"
             circuit_df.to_csv(circuit_csv, index=False, float_format="%.6g")

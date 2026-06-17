@@ -18,16 +18,6 @@ class EISCSVReader:
 
         return freq, z
 
-    @staticmethod
-    def omega_max(path: Path) -> float:
-        df = pd.read_csv(path)
-        df.columns = df.columns.str.strip()
-
-        idx_max = df["-Im(Z)/Ohm"].idxmax()
-        f_max = df.loc[idx_max, "freq/Hz"]
-
-        return 2 * np.pi * f_max
-
 
 class BioLogicConverter:
     def convert_folder(self, input_folder: Path, output_folder: Path) -> None:

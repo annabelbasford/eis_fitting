@@ -14,7 +14,7 @@ class AnalysisPlotter:
         figure_saver = FigureSaver(experiment.save_preferences)
 
         for circuit_name in experiment.circuits:
-            parameters_csv = experiment.paths.fits / f"eis_fit_parameters_{circuit_name}.csv"
+            parameters_csv = experiment.paths.fits / f"{experiment.name}_{circuit_name}.csv"
 
             if not parameters_csv.exists():
                 continue
@@ -36,7 +36,7 @@ class AnalysisPlotter:
                     right_axis_label=r"Pseudo capacitance ($F\times s^{\alpha-1}$)",
                     figure_name="R_and_Q",
                     mapping=self.circuits[circuit_name]["mapping"],
-                    save_root=experiment.paths.plots / "analysis",
+                    save_root=experiment.paths.plots,
                     figure_saver=figure_saver,
                     left_ylim=(1e1, 1e15),
                     right_ylim=(1e-12, 1e-2),
@@ -51,7 +51,7 @@ class AnalysisPlotter:
                     left_axis_label=r"Conductivity ($S.cm^{-1}$)",
                     figure_name="conductivities",
                     mapping=self.circuits[circuit_name]["mapping"],
-                    save_root=experiment.paths.plots / "analysis",
+                    save_root=experiment.paths.plots,
                     figure_saver=figure_saver,
                     left_ylim=(1e-8, 3e-3),
                     show_alpha=False,
@@ -125,7 +125,7 @@ class AnalysisPlotter:
         right_ylim=None,
         show_alpha=True,
     ):
-        save_folder = save_root / sample / "bar_charts"
+        save_folder = save_root / sample / circuit_name
         save_folder.mkdir(parents=True, exist_ok=True)
 
         df = pd.read_csv(parameters_csv)
@@ -296,6 +296,9 @@ class AnalysisPlotter:
             colours,
             alpha_labels,
         ):
+            if not np.isfinite(value):
+                continue
+
             ax.bar(
                 xpos,
                 value,

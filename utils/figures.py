@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import warnings
 
 
 class FigureSaver:
@@ -10,10 +11,9 @@ class FigureSaver:
         save_to_svg = self.save_preferences.get("svg", False)
         transparent = self.save_preferences.get("transparent", False)
 
-        try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Tight layout not applied.*")
             fig.tight_layout()
-        except Exception:
-            pass
 
         if transparent:
             fig.patch.set_alpha(0)

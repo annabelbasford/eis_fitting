@@ -27,7 +27,7 @@ class ExperimentPaths:
                 raise ValueError("output_root must be provided when output_mode='workspace'.")
 
             relative_experiment_path = self.root.relative_to(self.data_root)
-            self.processed_root = Path(output_root) / "processed" / relative_experiment_path
+            self.processed_root = Path(output_root) / relative_experiment_path
 
         else:
             raise ValueError("output_mode must be either 'local' or 'workspace'.")

@@ -8,7 +8,7 @@ class EISAnalyser:
 
     def run(self, experiment) -> None:
         for circuit_name in experiment.circuits:
-            parameters_csv = experiment.paths.fits / f"eis_fit_parameters_{circuit_name}.csv"
+            parameters_csv = experiment.paths.fits / f"{experiment.name}_{circuit_name}.csv"
 
             if not parameters_csv.exists():
                 print(f"Skipping missing file: {parameters_csv}")
@@ -19,7 +19,6 @@ class EISAnalyser:
                 experiment.geometry,
             )
 
-            self.add_ceff_columns(parameters_csv)
 
     @staticmethod
     def get_element_columns(parameters_csv, first_chars):
@@ -68,45 +67,4 @@ class EISAnalyser:
 
         df.to_csv(parameters_csv, index=False)
 
-    def add_ceff_columns(self, parameters_csv, sigma_omega=0):
-        df = pd.read_csv(parameters_csv)
-
-        if "omega_max" not in df.columns:
-            print(f"Skipping Ceff for {parameters_csv}: no omega_max")
-            return
-
-        omega = df["omega_max"].astype(float)
-
-        if "SD_omega_max" in df.columns:
-            sigma_omega = df["SD_omega_max"].astype(float)
-
-        for q_col in [c for c in df.columns if c.startswith("Q_")]:
-            name = q_col.split("_", maxsplit=1)[1]
-
-            alpha_col = f"alpha_{name}"
-            dq_col = f"SD_Q_{name}"
-            dalpha_col = f"SD_alpha_{name}"
-
-            required = [alpha_col, dq_col, dalpha_col]
-
-            if not all(col in df.columns for col in required):
-                print(f"Skipping incomplete CPE {name}")
-                continue
-
-            q = df[q_col].astype(float)
-            dq = df[dq_col].astype(float)
-            n = df[alpha_col].astype(float)
-            dn = df[dalpha_col].astype(float)
-
-            ceff = q * omega ** (n - 1)
-
-            rel = np.sqrt(
-                (dq / q) ** 2
-                + ((n - 1) * sigma_omega / omega) ** 2
-                + (np.log(omega) * dn) ** 2
-            )
-
-            df[f"Ceff_{name}"] = ceff
-            df[f"SD_Ceff_{name}"] = ceff * rel
-
-        df.to_csv(parameters_csv, index=False)
+   
