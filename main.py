@@ -7,7 +7,7 @@ from eis_fitting.pipeline import EISPipeline
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_ROOT = PROJECT_ROOT / "data"
 
-PERSON = "bel"
+PERSON = "Annabel"
 PROJECT = "eis_flex"
 
 # Choose one:

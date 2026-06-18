@@ -5,7 +5,7 @@ from eis_fitting.core.experiment import Experiment
 from eis_fitting.preprocessing.preprocessor import EISPreprocessor
 from eis_fitting.fitting.fitter import EISFitter
 from eis_fitting.analysis.analyser import EISAnalyser
-from eis_fitting.plotting.plotter import AnalysisPlotter
+from eis_fitting.plotting.plotter import EISPlotter
 
 from tqdm import tqdm
 
@@ -59,12 +59,31 @@ class EISPipeline:
         ):
             # note that the Bode and Nyquist plotting in EISFitter does
             # check the experiment.run.get("plot") during it's execution
-            EISFitter(self.circuits).run(experiment)
+            all_fit_data = EISFitter(self.circuits).run(experiment)
 
             EISAnalyser(self.circuits).run(experiment)
 
             if experiment.run.get("plot", True):
-                AnalysisPlotter(self.circuits).run(experiment)
+                plotting_limits = {
+                    "R_and_Q": {
+                        "left_ylim": (1e1, 1e15),
+                        "right_ylim": (1e-12, 1e-2),
+                    },
+                    "conductivities": {
+                        "left_ylim": (1e-9, 3e-3),
+                        "right_ylim": None,
+                    },
+                }
+
+                EISPlotter(
+                    self.circuits,
+                    plotting_limits=plotting_limits,
+                ).run(
+                    experiment=experiment,
+                    all_fit_data=all_fit_data,
+                    plot_fits=all_fit_data is not None,
+                    plot_analysis=True,
+                )
 
     def run_project(self, person: str, project: str) -> None:
         project_path = self.data_root / person / project
