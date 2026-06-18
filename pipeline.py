@@ -52,14 +52,10 @@ class EISPipeline:
         ):
             EISPreprocessor().run(experiment)
 
-        # only proceeds if no pre_plotting was required and "fits" folder is empty (it's already created in EISPreprocessor)
-        print(not experiment.run.get("pre_plot", True))
-        print(not any(experiment.paths.fits.iterdir()))
-        print(not experiment.run.get("pre_plot", True)
-            and not any(experiment.paths.fits.iterdir()))
+        # only proceeds if no pre_plotting was required and "fits" folder hasn't been created yet
         if (
-            not experiment.run.get("pre_plot", True)
-            and not any(experiment.paths.fits.iterdir())
+            not experiment.run.get("pre_plot", False)
+            and not experiment.paths.fits.is_dir()
         ):
             # note that the Bode and Nyquist plotting in EISFitter does
             # check the experiment.run.get("plot") during it's execution

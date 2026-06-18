@@ -44,12 +44,6 @@ class ExperimentPaths:
         # Optional preprocessing plots, only used if pre_plot=True.
         self.pre_plots = self.processed_root / "pre_plots"
 
-    def create_output_folders(self) -> None:
-        self.csv.mkdir(parents=True, exist_ok=True)
-        self.fits.mkdir(parents=True, exist_ok=True)
-        self.plots.mkdir(parents=True, exist_ok=True)
-
-
 class Experiment:
     def __init__(
         self,

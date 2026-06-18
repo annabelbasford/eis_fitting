@@ -238,7 +238,7 @@ class EISPreprocessor:
         self.preview_plotter = PreprocessPlotter()
 
     def run(self, experiment) -> None:
-        experiment.paths.create_output_folders()
+        experiment.paths.csv.mkdir(parents=True, exist_ok=True)
 
         input_folder = experiment.paths.input
         csv = experiment.paths.csv
