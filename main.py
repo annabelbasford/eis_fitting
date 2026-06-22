@@ -7,19 +7,27 @@ from eis_fitting.pipeline import EISPipeline
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_ROOT = PROJECT_ROOT / "data"
 
-PERSON = "Annabel"
-PROJECT = "eis_flex"
+# pipeline.run_project will take these as arguments to formate input directory path data_root / person / project
+PERSON = "enzo"
+PROJECT = "test"
 
-# Choose one:
+"""
+Two output modes are available :
+   - local : the processed data is saved along the raw data
+   - workspace (recommended) : processed data is stored in a distinct folder
+"""
+
+# uncomment the following lines if you want to save in local mode
 # OUTPUT_MODE = "local"
 # OUTPUT_ROOT = None
 
-# Or use external workspace:
+# comment the following lines if you want to save in local mode
 OUTPUT_MODE = "workspace"
 OUTPUT_ROOT = PROJECT_ROOT / "data_processed"
 
 
 def main():
+    # initialisation 
     pipeline = EISPipeline(
         data_root=DATA_ROOT,
         circuits=CIRCUITS,

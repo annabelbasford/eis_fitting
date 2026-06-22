@@ -1,11 +1,13 @@
 import shutil
 
 import pandas as pd
+import numpy as np
 from impedance.models.circuits import CustomCircuit
 
 import warnings
 
 from eis_fitting.io.readers import EISCSVReader
+
 
 class EISFitter:
     def __init__(self, circuits: dict):
@@ -58,7 +60,11 @@ class EISFitter:
                         "Z_fit": result["z_fit"],
                     }
 
-        self._save_results(all_results, output_folder, circuits_to_fit, experiment)
+        self._save_results(
+            all_results=all_results,
+            output_folder=output_folder,
+            experiment_name=experiment.name,
+        )
 
         return all_fit_data
 
@@ -77,10 +83,19 @@ class EISFitter:
             )
 
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", message="Covariance computation failed")
+                warnings.filterwarnings(
+                    "ignore", message="Covariance computation failed"
+                )
                 circuit.fit(freq, z, weight_by_modulus=True)
 
             z_fit = circuit.predict(freq)
+
+            chi_square, reduced_chi_square = self.compute_chi_square(
+                Z_exp=z,
+                Z_fit=z_fit,
+                n_parameters=len(circuit.initial_guess),
+                relative=True,
+            )
 
             param_names = circuit.get_param_names()[0]
             mapped_names = [circuit_mapping[param]["name"] for param in param_names]
@@ -90,6 +105,8 @@ class EISFitter:
                 "circuit_name": circuit_name,
                 "circuit_string": circuit_string,
                 "fit_success": True,
+                "chi_square": chi_square,
+                "reduced_chi_square": reduced_chi_square,
             }
 
             for name, value in zip(mapped_names, circuit.parameters_):
@@ -99,10 +116,6 @@ class EISFitter:
                 for name, sd in zip(mapped_names, circuit.conf_):
                     row[f"SD_{name}"] = sd
                     row[f"{name}_percent_error"] = 100 * sd / row[name]
-
-            for key, value in list(row.items()):
-                if isinstance(value, float):
-                    row[key] = round(value, 6)
 
             return {
                 "success": True,
@@ -121,11 +134,28 @@ class EISFitter:
                     "circuit_string": circuit_string,
                     "fit_success": False,
                     "error": str(exc),
+                    "chi_square": np.nan,
+                    "reduced_chi_square": np.nan,
                 },
                 "z_fit": None,
             }
 
-    def _save_results(self, all_results, output_folder, circuits_to_fit, experiment):
+    def _save_results(
+        self,
+        all_results,
+        output_folder,
+        experiment_name,
+    ):
+        """
+        Save one parameter CSV per circuit.
+
+        Each CSV only contains:
+        - metadata columns
+        - fit-quality columns
+        - parameters belonging to that circuit
+        - SD and percent-error columns for those parameters
+        """
+
         results_df = pd.DataFrame(all_results)
 
         if results_df.empty:
@@ -136,46 +166,135 @@ class EISFitter:
             "circuit_name",
             "circuit_string",
             "fit_success",
+            "fit_status",
+            "covariance_warning",
+            "chi_square",
+            "reduced_chi_square",
+            "omega_max",
+            "error",
         ]
 
-        ordered_columns = [col for col in base_columns if col in results_df.columns]
+        output_folder.mkdir(parents=True, exist_ok=True)
 
-        parameter_names = []
+        for circuit_name in results_df["circuit_name"].dropna().unique():
+            circuit_df = results_df[results_df["circuit_name"] == circuit_name].copy()
 
-        for col in results_df.columns:
-            if (
-                col not in base_columns
-                and not col.startswith("SD_")
-                and not col.endswith("_percent_error")
-                and col != "error"
-            ):
-                parameter_names.append(col)
+            if circuit_df.empty:
+                continue
 
-        parameter_names = list(dict.fromkeys(parameter_names))
+            ordered_columns = [col for col in base_columns if col in circuit_df.columns]
 
-        for param in parameter_names:
-            ordered_columns.append(param)
+            parameter_columns = self._get_circuit_parameter_columns(
+                circuit_name=circuit_name,
+                df=circuit_df,
+            )
 
-            sd_col = f"SD_{param}"
-            if sd_col in results_df.columns:
-                ordered_columns.append(sd_col)
+            for param in parameter_columns:
+                if param in circuit_df.columns:
+                    ordered_columns.append(param)
 
-            err_col = f"{param}_percent_error"
-            if err_col in results_df.columns:
-                ordered_columns.append(err_col)
+                sd_col = f"SD_{param}"
+                if sd_col in circuit_df.columns:
+                    ordered_columns.append(sd_col)
 
-        remaining_cols = [
-            col for col in results_df.columns
-            if col not in ordered_columns
-        ]
+                err_col = f"{param}_percent_error"
+                if err_col in circuit_df.columns:
+                    ordered_columns.append(err_col)
 
-        ordered_columns.extend(remaining_cols)
-        results_df = results_df[ordered_columns]
+            # Keep any useful non-empty columns that were not explicitly ordered.
+            # This avoids accidentally losing a diagnostic column.
+            remaining_columns = [
+                col
+                for col in circuit_df.columns
+                if col not in ordered_columns and not circuit_df[col].isna().all()
+            ]
 
-        for circuit_name in circuits_to_fit:
-            circuit_df = results_df[
-                results_df["circuit_name"] == circuit_name
-            ].copy()
+            ordered_columns.extend(remaining_columns)
 
-            circuit_csv = output_folder / f"{experiment.name}_{circuit_name}.csv"
-            circuit_df.to_csv(circuit_csv, index=False, float_format="%.6g")
+            circuit_df = circuit_df[ordered_columns]
+
+            save_path = output_folder / f"{experiment_name}_{circuit_name}.csv"
+
+            circuit_df.to_csv(save_path, index=False)
+
+    def _get_circuit_parameter_columns(
+        self,
+        circuit_name,
+        df,
+    ):
+        """
+        Return only the fitted parameter columns that belong to one circuit.
+
+        Supports both cases:
+        1. CSV columns use raw impedance.py names:
+           R_1, CPE_1_0, CPE_1_1
+
+        2. CSV columns use mapped display names:
+           R_i, Q_DL, alpha_DL
+        """
+
+        circuit = self.circuits[circuit_name]
+        mapping = circuit.get("mapping", {})
+
+        parameter_columns = []
+
+        for raw_name, info in mapping.items():
+            display_name = info.get("name")
+
+            if raw_name in df.columns:
+                parameter_columns.append(raw_name)
+
+            elif display_name in df.columns:
+                parameter_columns.append(display_name)
+
+        return parameter_columns
+
+    @staticmethod
+    def compute_chi_square(Z_exp, Z_fit, n_parameters, relative=True):
+        """
+        Compute chi-square and reduced chi-square for a complex EIS fit.
+        Parameters
+        ----------
+        Z_exp : array-like of complex
+            Experimental impedance values.
+        Z_fit : array-like of complex
+            Fitted/model impedance values.
+        n_parameters : int
+            Number of fitted circuit parameters.
+        relative : bool
+            If True, normalize residuals by |Z_exp|².
+            This is usually more useful for EIS because impedance magnitude
+            can vary strongly across frequency. Also the reason why we fit with
+            "weight_by_modulus"=True
+        Returns
+        -------
+        chi_square : float
+            Chi-square value.
+        reduced_chi_square : float
+            Chi-square divided by degrees of freedom.
+        """
+        Z_exp = np.asarray(Z_exp, dtype=complex)
+        Z_fit = np.asarray(Z_fit, dtype=complex)
+        residual = Z_exp - Z_fit
+        residual_squared = residual.real**2 + residual.imag**2
+        if relative:
+            denominator = np.abs(Z_exp) ** 2
+            valid = (
+                np.isfinite(residual_squared)
+                & np.isfinite(denominator)
+                & (denominator > 0)
+            )
+            chi_terms = residual_squared[valid] / denominator[valid]
+        else:
+            valid = np.isfinite(residual_squared)
+            chi_terms = residual_squared[valid]
+        n_valid_points = np.sum(valid)
+        if n_valid_points == 0:
+            return np.nan, np.nan
+        chi_square = np.sum(chi_terms)
+        degrees_of_freedom = (2 * n_valid_points) - n_parameters
+        if degrees_of_freedom <= 0:
+            reduced_chi_square = np.nan
+        else:
+            reduced_chi_square = chi_square / degrees_of_freedom
+        return chi_square, reduced_chi_square

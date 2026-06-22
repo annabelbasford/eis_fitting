@@ -12,24 +12,18 @@ class AnalysisPlotter:
         self.circuits = circuits
         self.plotting_limits = plotting_limits or {}
 
-    """
-    Plot fitted and derived parameters as bar charts.
-
-    This class reads analysed/fitted parameter CSVs and creates the
-    parameter summary plots:
-
-    processed/
-    └── fits/
-        └── plots/
-            └── sample/
-                └── circuit/
-                    ├── sample_circuit_R_and_Q.png
-                    └── sample_circuit_conductivities.png
-    """
-
     def run(self, experiment) -> None:
         """
-        Plot analysis bar charts for each sample and selected circuit.
+        Plot analysis bar charts.
+
+        For each circuit:
+        1. Plot R/Q or R/C bar charts for each sample.
+           Saved in:
+               exp/fits/plots/<sample>/<circuit>/
+
+        2. Plot one R_i conductivity summary chart for the whole experiment.
+           Saved in:
+               exp/fits/plots/
         """
 
         figure_saver = FigureSaver(experiment.save_preferences)
@@ -43,38 +37,35 @@ class AnalysisPlotter:
                 print(f"Skipping missing file: {parameters_csv}")
                 continue
 
+            # ------------------------------------------------------------
+            # 1. Per-sample R/Q or R/C bar charts
+            # ------------------------------------------------------------
+            resistance_columns = self.get_element_columns(
+                parameters_csv,
+                "R",
+            )
+
+            q_columns = self.get_element_columns(
+                parameters_csv,
+                "Q",
+            )
+
+            capacitance_columns = self.get_element_columns(
+                parameters_csv,
+                "C",
+            )
+
+            right_columns = q_columns
+            right_axis_label = r"Pseudo capacitance " r"($F\times s^{\alpha-1}$)"
+
+            if not right_columns:
+                right_columns = capacitance_columns
+                right_axis_label = r"Capacitance ($F$)"
+
+            r_and_q_limits = self.get_limits("R_and_Q")
+
             for csv_path in sorted(experiment.paths.csv.glob("*.csv")):
                 sample = csv_path.stem
-
-                resistance_columns = self.get_element_columns(
-                    parameters_csv,
-                    "R",
-                )
-
-                q_columns = self.get_element_columns(
-                    parameters_csv,
-                    "Q",
-                )
-
-                capacitance_columns = self.get_element_columns(
-                    parameters_csv,
-                    "C",
-                )
-
-                conductivity_columns = self.get_element_columns(
-                    parameters_csv,
-                    "conductivity",
-                )
-
-                right_columns = q_columns
-
-                right_axis_label = r"Pseudo capacitance " r"($F\times s^{\alpha-1}$)"
-
-                if not right_columns:
-                    right_columns = capacitance_columns
-                    right_axis_label = r"Capacitance ($F$)"
-
-                r_and_q_limits = self.get_limits("R_and_Q")
 
                 self.plot_parameter_bars(
                     parameters_csv=parameters_csv,
@@ -93,22 +84,164 @@ class AnalysisPlotter:
                     show_alpha=True,
                 )
 
-                conductivity_limits = self.get_limits("conductivities")
+            # ------------------------------------------------------------
+            # 2. One experiment-level R_i conductivity chart
+            # ------------------------------------------------------------
+            self.plot_ri_conductivity_summary(
+                parameters_csv=parameters_csv,
+                circuit_name=circuit_name,
+                experiment_name=experiment.name,
+                save_root=experiment.paths.plots,
+                figure_saver=figure_saver,
+                cmap_name="viridis",
+            )
 
-                self.plot_parameter_bars(
-                    parameters_csv=parameters_csv,
-                    circuit_name=circuit_name,
-                    sample=sample,
-                    left_columns=conductivity_columns,
-                    left_axis_label=r"Conductivity ($S.cm^{-1}$)",
-                    figure_name="conductivities",
-                    mapping=self.circuits[circuit_name]["mapping"],
-                    save_root=experiment.paths.plots,
-                    figure_saver=figure_saver,
-                    left_ylim=conductivity_limits.get("left_ylim"),
-                    right_ylim=conductivity_limits.get("right_ylim"),
-                    show_alpha=False,
-                )
+    def plot_ri_conductivity_summary(
+        self,
+        parameters_csv,
+        circuit_name,
+        experiment_name,
+        save_root,
+        figure_saver,
+        cmap_name="viridis",
+    ):
+        """
+        Plot one experiment-level bar chart of R_i conductivity.
+
+        One bar = one sample.
+
+        Saved in:
+            exp/fits/plots/
+
+        Expected columns:
+            sample
+            conductivity_S_cm_R_i
+            SD_conductivity_S_cm_R_i
+        """
+
+        conductivity_col = "conductivity_S_cm_R_i"
+        sd_col = "SD_conductivity_S_cm_R_i"
+
+        df = pd.read_csv(parameters_csv)
+        df = self._clean_numeric_dataframe(df)
+
+        if "sample" not in df.columns:
+            print(
+                f"Skipping R_i conductivity plot: no sample column in {parameters_csv.name}"
+            )
+            return
+
+        if conductivity_col not in df.columns:
+            print(
+                f"Skipping R_i conductivity plot: no {conductivity_col} "
+                f"in {parameters_csv.name}"
+            )
+            return
+
+        values = pd.to_numeric(df[conductivity_col], errors="coerce")
+
+        valid = values.notna()
+        valid &= np.isfinite(values)
+        valid &= values > 0
+
+        if "fit_success" in df.columns:
+            fit_success = (
+                df["fit_success"].astype(str).str.lower().isin(["true", "1", "yes"])
+            )
+            valid &= fit_success
+
+        plot_df = df.loc[valid, ["sample", conductivity_col]].copy()
+
+        if plot_df.empty:
+            print(f"No valid R_i conductivity values found for {circuit_name}")
+            return
+
+        plot_df[conductivity_col] = pd.to_numeric(
+            plot_df[conductivity_col],
+            errors="coerce",
+        )
+
+        if sd_col in df.columns:
+            plot_df[sd_col] = pd.to_numeric(
+                df.loc[valid, sd_col],
+                errors="coerce",
+            )
+        else:
+            plot_df[sd_col] = np.nan
+
+        samples = plot_df["sample"].astype(str).tolist()
+        conductivities = plot_df[conductivity_col].to_numpy(dtype=float)
+        errors = plot_df[sd_col].to_numpy(dtype=float)
+
+        x_values = np.arange(len(samples))
+
+        # Nice colour degradé.
+        cmap = plt.get_cmap(cmap_name)
+        colours = cmap(np.linspace(0.15, 0.85, len(samples)))
+
+        fig_width = max(8, len(samples) * 0.65)
+        fig, ax = plt.subplots(figsize=(fig_width, 5))
+
+        for xpos, sample, conductivity, error, colour in zip(
+            x_values,
+            samples,
+            conductivities,
+            errors,
+            colours,
+        ):
+            kwargs = {}
+
+            if np.isfinite(error) and error >= 0 and conductivity - error > 0:
+                kwargs["yerr"] = error
+                kwargs["capsize"] = 5
+
+            ax.bar(
+                xpos,
+                conductivity,
+                width=0.25,
+                alpha=0.9,
+                color=colour,
+                edgecolor="black",
+                linewidth=1.2,
+                label=sample,
+                **kwargs,
+            )
+
+        ax.set_xticks(x_values)
+        ax.set_xticklabels(
+            samples,
+            rotation=45,
+            ha="right",
+            fontsize=11,
+        )
+
+        ax.set_ylabel(r"$R_i$ conductivity ($S.cm^{-1}$)", fontsize=14)
+        ax.set_title(
+            rf"{experiment_name} | {circuit_name} | $R_i$ conductivity",
+            fontsize=14,
+        )
+
+        # Automatic y-axis scaling.
+        ax.autoscale(axis="y")
+        ax.margins(y=0.15)
+
+        ax.legend(
+            title="Sample",
+            fontsize=9,
+            title_fontsize=10,
+            frameon=False,
+            bbox_to_anchor=(1.02, 1),
+            loc="upper left",
+        )
+
+        fig.tight_layout()
+
+        figure_saver.save(
+            save_path=save_root
+            / f"{experiment_name}_{circuit_name}_Ri_conductivity_all_samples",
+            fig=fig,
+            axes={ax},
+        )
 
     def get_parameter_style(self, param, display_mapping):
         """

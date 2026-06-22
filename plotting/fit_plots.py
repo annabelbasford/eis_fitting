@@ -18,7 +18,16 @@ class FitPlotter:
     def __init__(self, figure_saver: FigureSaver):
         self.figure_saver = figure_saver
 
-    def plot_nyquist(self, freq, z, z_fit, title, save_path):
+    def plot_nyquist(
+        self,
+        freq,
+        z,
+        z_fit,
+        title,
+        save_path,
+        chi_square=None,
+        reduced_chi_square=None,
+    ):
         """
         Plot measured and fitted Nyquist spectra.
         """
@@ -50,13 +59,27 @@ class FitPlotter:
         ax.margins(x=0.05, y=0.1)
         ax.legend()
 
+        self._add_fit_statistics_box(
+            ax=ax,
+            chi_square=chi_square,
+            reduced_chi_square=reduced_chi_square,
+        )
         self.figure_saver.save(
             save_path=save_path,
             fig=fig,
             axes={ax},
         )
 
-    def plot_bode(self, freq, z, z_fit, title, save_path):
+    def plot_bode(
+        self,
+        freq,
+        z,
+        z_fit,
+        title,
+        save_path,
+        chi_square=None,
+        reduced_chi_square=None,
+    ):
         """
         Plot measured and fitted Bode magnitude/phase spectra.
         """
@@ -122,6 +145,12 @@ class FitPlotter:
         axes[1].set_ylabel(r"Phase ($°$)", fontsize=14)
 
         fig.suptitle(title)
+
+        self._add_fit_statistics_box(
+            ax=axes[1],
+            chi_square=chi_square,
+            reduced_chi_square=reduced_chi_square,
+        )
 
         self.figure_saver.save(
             save_path=save_path,
@@ -299,8 +328,8 @@ class FitPlotter:
         )
 
         axes[1].set_xscale("log")
-        axes[1].set_xlabel(r"Frequency ($Hz$)", fontsize=14)
-        axes[1].set_ylabel(r"Phase ($°$)", fontsize=14)
+        axes[1].set_xlabel(r"Frequency (Hz)", fontsize=14)
+        axes[1].set_ylabel(r"Phase (°)", fontsize=14)
 
         fig.suptitle(f"{circuit_name} | Bode", fontsize=13)
 
@@ -309,3 +338,58 @@ class FitPlotter:
             fig=fig,
             axes={axes[0], axes[1]},
         )
+
+    def _add_fit_statistics_box(
+        self,
+        ax,
+        chi_square=None,
+        reduced_chi_square=None,
+        x=0.03,
+        y=0.97,
+    ):
+        """
+        Add chi-square and reduced chi-square as a text box on a plot.
+        """
+
+        text = self._format_fit_statistics(
+            chi_square=chi_square,
+            reduced_chi_square=reduced_chi_square,
+        )
+
+        if text is None:
+            return
+
+        ax.text(
+            x,
+            y,
+            text,
+            transform=ax.transAxes,
+            ha="left",
+            va="top",
+            fontsize=11,
+            bbox={
+                "boxstyle": "round,pad=0.35",
+                "facecolor": "white",
+                "edgecolor": "black",
+                "alpha": 0.85,
+            },
+        )
+
+    @staticmethod
+    def _format_fit_statistics(chi_square=None, reduced_chi_square=None):
+        """
+        Format chi-square statistics for display on fit plots.
+        """
+
+        lines = []
+
+        if chi_square is not None and np.isfinite(chi_square):
+            lines.append(rf"$\chi^2$ = {chi_square:.3e}")
+
+        if reduced_chi_square is not None and np.isfinite(reduced_chi_square):
+            lines.append(rf"$\chi^2_\mathrm{{red}}$ = {reduced_chi_square:.3e}")
+
+        if not lines:
+            return None
+
+        return "\n".join(lines)

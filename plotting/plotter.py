@@ -1,3 +1,5 @@
+import pandas as pd
+
 from eis_fitting.plotting.fit_plots import FitPlotter
 from eis_fitting.plotting.analysis_plots import AnalysisPlotter
 from eis_fitting.utils.figures import FigureSaver
@@ -79,6 +81,24 @@ class EISPlotter:
             for sample_name, data in fit_data_dict.items():
                 circuit_plot_folder = plot_root / sample_name / circuit_name
 
+                circuit_fit_parameter_file = (
+                    experiment.paths.fits / f"{experiment.name}_{circuit_name}.csv"
+                )
+
+                df_params = pd.read_csv(circuit_fit_parameter_file)
+
+                row = df_params[
+                    (df_params["sample"] == sample_name)
+                    & (df_params["circuit_name"] == circuit_name)
+                ]
+
+                if row.empty:
+                    chi_square = None
+                    reduced_chi_square = None
+                else:
+                    chi_square = row.iloc[0]["chi_square"]
+                    reduced_chi_square = row.iloc[0]["reduced_chi_square"]
+
                 circuit_plot_folder.mkdir(
                     parents=True,
                     exist_ok=True,
@@ -92,6 +112,8 @@ class EISPlotter:
                     save_path=(
                         circuit_plot_folder / f"{sample_name}_{circuit_name}_nyquist"
                     ),
+                    chi_square=chi_square,
+                    reduced_chi_square=reduced_chi_square,
                 )
 
                 fit_plotter.plot_bode(
@@ -102,6 +124,8 @@ class EISPlotter:
                     save_path=(
                         circuit_plot_folder / f"{sample_name}_{circuit_name}_bode"
                     ),
+                    chi_square=chi_square,
+                    reduced_chi_square=reduced_chi_square,
                 )
 
         self.plot_all_runs(
