@@ -26,6 +26,7 @@ class EISPlotter:
         all_fit_data=None,
         plot_fits=True,
         plot_analysis=True,
+        display_chi_square=True,
     ) -> None:
         """
         Run plotting stage.
@@ -49,6 +50,7 @@ class EISPlotter:
             self.plot_fit_results(
                 experiment=experiment,
                 all_fit_data=all_fit_data,
+                display_chi_square=display_chi_square
             )
 
         if plot_analysis:
@@ -56,7 +58,7 @@ class EISPlotter:
                 experiment=experiment,
             )
 
-    def plot_fit_results(self, experiment, all_fit_data) -> None:
+    def plot_fit_results(self, experiment, all_fit_data, display_chi_square) -> None:
         """
         Plot Nyquist/Bode overlays from in-memory fit results.
         """
@@ -92,7 +94,7 @@ class EISPlotter:
                     & (df_params["circuit_name"] == circuit_name)
                 ]
 
-                if row.empty:
+                if row.empty or not display_chi_square:
                     chi_square = None
                     reduced_chi_square = None
                 else:

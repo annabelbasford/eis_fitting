@@ -92,12 +92,12 @@ CIRCUITS = {
         "mapping": {
             "R_1": {
                 "name": "R_i",
-                "colour": "#666666",
+                "colour": "#80D4F8",
                 "order": 0,
                 "use_for_conductivity": False,
             },
             "R_2": {
-                "name": "R_PEDOT",
+                "name": "R_e",
                 "colour": "#F37F8C",
                 "order": 1,
                 "use_for_conductivity": True,
@@ -105,22 +105,22 @@ CIRCUITS = {
             },
             "CPE_1_0": {
                 "name": "Q_g",
-                "colour": "#7C84C2",
+                "colour": "#F49A80",
                 "order": 2,
             },
             "CPE_1_1": {
                 "name": "alpha_g",
-                "colour": "#7C84C2",
+                "colour": "#F49A80",
                 "order": 2,
             },
             "CPE_2_0": {
                 "name": "Q_DL",
-                "colour": "#B68D40",
+                "colour": "#7C84C2",
                 "order": 3,
             },
             "CPE_2_1": {
                 "name": "alpha_DL",
-                "colour": "#B68D40",
+                "colour": "#7C84C2",
                 "order": 3,
             },
         },
@@ -136,12 +136,12 @@ CIRCUITS = {
             0.8,  # CPE_2_1 = alpha_DL
         ],
         "mapping": {
-            "R_1": {"name": "R_s", "colour": "#666666", "order": 0},
-            "R_2": {"name": "R_i", "colour": "#7C84C2", "order": 1},
-            "CPE_1_0": {"name": "Q_bulk", "colour": "#80D4F8", "order": 1},
-            "CPE_1_1": {"name": "alpha_bulk", "colour": "#80D4F8", "order": 1},
-            "CPE_2_0": {"name": "Q_ep", "colour": "#F37F8C", "order": 2},
-            "CPE_2_1": {"name": "alpha_ep", "colour": "#F37F8C", "order": 2},
+            "R_1": {"name": "R_c", "colour": "#69BC86", "order": 0},
+            "R_2": {"name": "R_i", "colour": "#80D4F8", "order": 1},
+            "CPE_1_0": {"name": "Q_g", "colour": "#F49A80", "order": 1},
+            "CPE_1_1": {"name": "alpha_g", "colour": "#F49A80", "order": 1},
+            "CPE_2_0": {"name": "Q_DL", "colour": "#7C84C2", "order": 2},
+            "CPE_2_1": {"name": "alpha_DL", "colour": "#7C84C2", "order": 2},
         },
     },
     "pseudo_randles_DL": {
@@ -159,47 +159,47 @@ CIRCUITS = {
         ],
         "mapping": {
             "R_1": {
-                "name": "R_i",
+                "name": "R_c",
                 "colour": "#80D4F8",
                 "order": 0,
             },
             "CPE_1_0": {
-                "name": "Q_DL",
+                "name": "Q_g",
                 "colour": "#7C84C2",
                 "order": 0,
             },
             "CPE_1_1": {
-                "name": "alpha_DL",
+                "name": "alpha_g",
                 "colour": "#7C84C2",
                 "order": 0,
             },
             "R_2": {
-                "name": "R_T",
+                "name": "R_i",
                 "colour": "#F37F8C",
                 "order": 1,
             },
             "CPE_2_0": {
-                "name": "Q_T",
+                "name": "Q_DL",
                 "colour": "#B39DDB",
                 "order": 1,
             },
             "CPE_2_1": {
-                "name": "alpha_T",
+                "name": "alpha_DL",
                 "colour": "#B39DDB",
                 "order": 1,
             },
             "CPE_3_0": {
-                "name": "Q_LF",
+                "name": "Q_pol",
                 "colour": "#9AD0A3",
                 "order": 2,
             },
             "CPE_3_1": {
-                "name": "alpha_LF",
+                "name": "alpha_pol",
                 "colour": "#9AD0A3",
                 "order": 2,
             },
             "R_3": {
-                "name": "R_LF",
+                "name": "R_pol",
                 "colour": "#F4A261",
                 "order": 2,
             },

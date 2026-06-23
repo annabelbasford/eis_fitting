@@ -14,7 +14,7 @@ class EISFitter:
         self.circuits = circuits
         self.reader = EISCSVReader()
 
-    def run(self, experiment) -> None:
+    def run(self, experiment, full_terminal = True) -> None:
         output_folder = experiment.paths.fits
         pre_plot_folder = experiment.paths.pre_plots
 
@@ -38,7 +38,8 @@ class EISFitter:
 
         for csv_path in csv_files:
             sample_name = csv_path.stem
-            print(f"\nFitting: {sample_name}")
+            if full_terminal :
+                print(f"\nFitting: {sample_name}")
 
             freq, z = self.reader.read_impedance(csv_path)
 
@@ -49,6 +50,7 @@ class EISFitter:
                     circuit_info=circuit_info,
                     freq=freq,
                     z=z,
+                    full_terminal=full_terminal
                 )
 
                 all_results.append(result["row"])
@@ -68,12 +70,13 @@ class EISFitter:
 
         return all_fit_data
 
-    def _fit_one(self, sample_name, circuit_name, circuit_info, freq, z):
+    def _fit_one(self, sample_name, circuit_name, circuit_info, freq, z, full_terminal = True):
         circuit_string = circuit_info["string"]
         initial_guess = circuit_info["guess"]
         circuit_mapping = circuit_info["mapping"]
 
-        print(f"  Trying circuit: {circuit_name}")
+        if full_terminal :
+            print(f"  Trying circuit: {circuit_name}")
 
         try:
             circuit = CustomCircuit(
@@ -124,7 +127,8 @@ class EISFitter:
             }
 
         except Exception as exc:
-            print(f"    Fit failed: {exc}")
+            if full_terminal :
+                print(f"Fit failed: {exc}")
 
             return {
                 "success": False,

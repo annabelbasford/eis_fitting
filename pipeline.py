@@ -37,13 +37,14 @@ class EISPipeline:
             output_root=self.output_root,
         )
 
-    def run_experiment(self, experiment_path: Path) -> None:
+    def run_experiment(self, experiment_path: Path, full_terminal=True) -> None:
         experiment = self.load_experiment(experiment_path)
 
-        print(f"\n=== Running experiment: {experiment.name} ===")
-        print(f"Description: {experiment.description}")
-        print(f"Input folder: {experiment.paths.input}")
-        print(f"Processed output: {experiment.paths.processed_root}")
+        if full_terminal :
+            print(f"\n=== Running experiment: {experiment.name} ===")
+            print(f"Description: {experiment.description}")
+            print(f"Input folder: {experiment.paths.input}")
+            print(f"Processed output: {experiment.paths.processed_root}")
 
         # Preprocesses the data if it doesn't already have a processed folder
         # or if preplot was required. In which case, no fitting nor analysis will happen afterwards
@@ -59,7 +60,7 @@ class EISPipeline:
         ):
             # note that the Bode and Nyquist plotting in EISFitter does
             # check the experiment.run.get("plot") during it's execution
-            all_fit_data = EISFitter(self.circuits).run(experiment)
+            all_fit_data = EISFitter(self.circuits).run(experiment, full_terminal)
 
             EISAnalyser(self.circuits).run(experiment)
 
@@ -83,9 +84,10 @@ class EISPipeline:
                     all_fit_data=all_fit_data,
                     plot_fits=all_fit_data is not None,
                     plot_analysis=True,
+                    display_chi_square=True
                 )
 
-    def run_project(self, person: str, project: str) -> None:
+    def run_project(self, person: str, project: str, full_terminal = True) -> None:
         project_path = self.data_root / person / project
 
         if not project_path.exists():
@@ -98,4 +100,4 @@ class EISPipeline:
             if not (experiment_path / "metadata.json").exists():
                 continue
 
-            self.run_experiment(experiment_path)
+            self.run_experiment(experiment_path, full_terminal)
