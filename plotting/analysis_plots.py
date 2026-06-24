@@ -64,6 +64,8 @@ class AnalysisPlotter:
 
             r_and_q_limits = self.get_limits("R_and_Q")
 
+            conductivities_limits = self.get_limits("conductivities")
+
             for csv_path in sorted(experiment.paths.csv.glob("*.csv")):
                 sample = csv_path.stem
 
@@ -93,6 +95,7 @@ class AnalysisPlotter:
                 experiment_name=experiment.name,
                 save_root=experiment.paths.plots,
                 figure_saver=figure_saver,
+                y_lim=conductivities_limits.get("left_ylim"),
                 cmap_name="viridis",
             )
 
@@ -103,6 +106,7 @@ class AnalysisPlotter:
         experiment_name,
         save_root,
         figure_saver,
+        y_lim=None,
         cmap_name="viridis",
     ):
         """
@@ -194,7 +198,7 @@ class AnalysisPlotter:
             if np.isfinite(error) and error >= 0 and conductivity - error > 0:
                 kwargs["yerr"] = error
                 kwargs["capsize"] = 5
-
+            
             ax.bar(
                 xpos,
                 conductivity,
@@ -215,9 +219,9 @@ class AnalysisPlotter:
             fontsize=11,
         )
 
-        ax.set_ylabel(r"$R_i$ conductivity ($S.cm^{-1}$)", fontsize=14)
+        ax.set_ylabel(r"$\sigma_i$ conductivity ($S.cm^{-1}$)", fontsize=14)
         ax.set_title(
-            rf"{experiment_name} | {circuit_name} | $R_i$ conductivity",
+            rf"{experiment_name} | {circuit_name} | $\sigma_i$ conductivity",
             fontsize=14,
         )
 
@@ -234,6 +238,10 @@ class AnalysisPlotter:
             loc="upper left",
         )
 
+        ax.set_yscale("log")
+        if y_lim != None:
+            ax.set_ylim(*y_lim)
+
         fig.tight_layout()
 
         figure_saver.save(
@@ -242,103 +250,6 @@ class AnalysisPlotter:
             fig=fig,
             axes={ax},
         )
-
-    def get_parameter_style(self, param, display_mapping):
-        """
-        Return plotting order and colour for a parameter.
-
-        Derived parameters inherit the style of their parent parameter.
-        """
-
-        is_derived = False
-        base_param = param
-
-        if param.startswith("conductivity_S_cm_"):
-            base_param = param.replace("conductivity_S_cm_", "")
-            is_derived = True
-
-        elif param.startswith("Ceff_"):
-            base_param = "Q_" + param.replace("Ceff_", "")
-            is_derived = True
-
-        style = display_mapping.get(base_param, {})
-
-        colour = style.get("colour", "gray")
-        order = style.get("order", float("inf"))
-
-        if is_derived:
-            colour = self.adjust_colour(colour, factor=-0.35)
-
-        return order, colour
-
-    def get_limits(self, figure_name: str) -> dict:
-        return self.plotting_limits.get(figure_name, {})
-
-    @staticmethod
-    def get_element_columns(parameters_csv, first_chars):
-        """
-        Return fitted/derived parameter columns starting with first_chars.
-
-        Excludes:
-        - standard deviation columns
-        - percent error columns
-        - metadata/status columns
-        """
-
-        df = pd.read_csv(parameters_csv)
-
-        excluded = {
-            "sample",
-            "circuit_name",
-            "circuit_string",
-            "fit_success",
-            "fit_status",
-            "covariance_warning",
-            "error",
-        }
-
-        matching_columns = {
-            col
-            for col in df.columns
-            if col.startswith(first_chars)
-            and not col.startswith("SD_")
-            and not col.endswith("_percent_error")
-            and col not in excluded
-        }
-
-        return matching_columns
-
-    @staticmethod
-    def adjust_colour(colour, factor=0.2):
-        """
-        Lighten or darken a colour.
-
-        factor > 0 : lighten
-        factor < 0 : darken
-        """
-
-        rgb = np.array(to_rgb(colour))
-
-        if factor >= 0:
-            rgb = rgb + (1 - rgb) * factor
-        else:
-            rgb = rgb * (1 + factor)
-
-        return to_hex(rgb)
-
-    @staticmethod
-    def get_associated_alpha(param):
-        """
-        Return the alpha column associated with a Q or Ceff parameter.
-        """
-
-        if param.startswith("Q_"):
-            return param.replace("Q_", "alpha_")
-
-        if param.startswith("Ceff_"):
-            return "alpha_" + param.replace("Ceff_", "")
-
-        return None
 
     def plot_parameter_bars(
         self,
@@ -485,6 +396,103 @@ class AnalysisPlotter:
             fig=fig,
             axes=axes,
         )
+
+    def get_parameter_style(self, param, display_mapping):
+        """
+        Return plotting order and colour for a parameter.
+
+        Derived parameters inherit the style of their parent parameter.
+        """
+
+        is_derived = False
+        base_param = param
+
+        if param.startswith("conductivity_S_cm_"):
+            base_param = param.replace("conductivity_S_cm_", "")
+            is_derived = True
+
+        elif param.startswith("Ceff_"):
+            base_param = "Q_" + param.replace("Ceff_", "")
+            is_derived = True
+
+        style = display_mapping.get(base_param, {})
+
+        colour = style.get("colour", "gray")
+        order = style.get("order", float("inf"))
+
+        if is_derived:
+            colour = self.adjust_colour(colour, factor=-0.35)
+
+        return order, colour
+
+    def get_limits(self, figure_name: str) -> dict:
+        return self.plotting_limits.get(figure_name, {})
+
+    @staticmethod
+    def get_element_columns(parameters_csv, first_chars):
+        """
+        Return fitted/derived parameter columns starting with first_chars.
+
+        Excludes:
+        - standard deviation columns
+        - percent error columns
+        - metadata/status columns
+        """
+
+        df = pd.read_csv(parameters_csv)
+
+        excluded = {
+            "sample",
+            "circuit_name",
+            "circuit_string",
+            "fit_success",
+            "fit_status",
+            "covariance_warning",
+            "error",
+        }
+
+        matching_columns = {
+            col
+            for col in df.columns
+            if col.startswith(first_chars)
+            and not col.startswith("SD_")
+            and not col.endswith("_percent_error")
+            and col not in excluded
+        }
+
+        return matching_columns
+
+    @staticmethod
+    def adjust_colour(colour, factor=0.2):
+        """
+        Lighten or darken a colour.
+
+        factor > 0 : lighten
+        factor < 0 : darken
+        """
+
+        rgb = np.array(to_rgb(colour))
+
+        if factor >= 0:
+            rgb = rgb + (1 - rgb) * factor
+        else:
+            rgb = rgb * (1 + factor)
+
+        return to_hex(rgb)
+
+    @staticmethod
+    def get_associated_alpha(param):
+        """
+        Return the alpha column associated with a Q or Ceff parameter.
+        """
+
+        if param.startswith("Q_"):
+            return param.replace("Q_", "alpha_")
+
+        if param.startswith("Ceff_"):
+            return "alpha_" + param.replace("Ceff_", "")
+
+        return None
 
     @staticmethod
     def _clean_numeric_dataframe(df):

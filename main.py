@@ -8,7 +8,7 @@ DATA_ROOT = PROJECT_ROOT / "data"
 
 # pipeline.run_project will take these as arguments to formate input directory path data_root / person / project
 PERSON = "femke"
-PROJECT = "EIS_hydrogels"
+PROJECT = "MV"
 
 """
 Two output modes are available :

@@ -67,11 +67,11 @@ class EISPipeline:
             if experiment.run.get("plot", True):
                 plotting_limits = {
                     "R_and_Q": {
-                        "left_ylim": (1e1, 1e15),
+                        "left_ylim": (1e-1, 1e15),
                         "right_ylim": (1e-12, 1e-2),
                     },
                     "conductivities": {
-                        "left_ylim": (1e-9, 3e-3),
+                        "left_ylim": (1e-10, 1e-4),
                         "right_ylim": None,
                     },
                 }
