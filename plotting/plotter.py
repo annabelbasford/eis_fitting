@@ -1,9 +1,8 @@
 import pandas as pd
 
-from eis_fitting.plotting.fit_plots import FitPlotter
-from eis_fitting.plotting.analysis_plots import AnalysisPlotter
-from eis_fitting.utils.figures import FigureSaver
-
+from .fit_plots import FitPlotter
+from .analysis_plots import AnalysisPlotter
+from ..utils import FigureSaver
 
 class EISPlotter:
     def __init__(self, circuits: dict, plotting_limits: dict | None = None):
@@ -26,6 +25,7 @@ class EISPlotter:
         all_fit_data=None,
         plot_fits=True,
         plot_analysis=True,
+        plot_residuals=True,
         display_chi_square=True,
     ) -> None:
         """
@@ -44,6 +44,9 @@ class EISPlotter:
 
         plot_analysis : bool
             Whether to plot parameter bar charts.
+
+        plot_residuals : bool
+            Whether to plot residuals.
         """
 
         if plot_fits and all_fit_data is not None:
@@ -51,6 +54,7 @@ class EISPlotter:
                 experiment=experiment,
                 all_fit_data=all_fit_data,
                 display_chi_square=display_chi_square,
+                plot_residuals=plot_residuals,
             )
 
         if plot_analysis:
@@ -59,7 +63,7 @@ class EISPlotter:
             )
 
     # Plot Nyquist/Bode overlays from in-memory fit results.
-    def plot_fit_results(self, experiment, all_fit_data, display_chi_square) -> None:
+    def plot_fit_results(self, experiment, all_fit_data, display_chi_square, plot_residuals) -> None:
 
         if not all_fit_data:
             print("No fit data available for plotting.")
@@ -128,16 +132,17 @@ class EISPlotter:
                     reduced_chi_square=reduced_chi_square,
                 )
 
-                fit_plotter.plot_residuals(
-                    frequencies=data["freq"],
-                    Z_exp=data["Z"],
-                    Z_fit=data["Z_fit"],
-                    sample=sample_name,
-                    circuit_name=circuit_name,
-                    save_folder=(
-                        circuit_plot_folder / f"{sample_name}_{circuit_name}_residuals"
-                    ),
-                    chi_square=chi_square,
+                if plot_residuals:
+                    fit_plotter.plot_residuals(
+                        frequencies=data["freq"],
+                        Z_exp=data["Z"],
+                        Z_fit=data["Z_fit"],
+                        sample=sample_name,
+                        circuit_name=circuit_name,
+                        save_folder=(
+                            circuit_plot_folder / f"{sample_name}_{circuit_name}_residuals"
+                        ),
+                        chi_square=chi_square,
                     reduced_chi_square=reduced_chi_square,
                 )
 

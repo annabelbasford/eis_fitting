@@ -2,9 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from matplotlib.colors import to_rgb, to_hex
-
-from eis_fitting.utils.figures import FigureSaver
+from ..utils import FigureSaver
 
 
 class AnalysisPlotter:
@@ -37,9 +35,7 @@ class AnalysisPlotter:
                 print(f"Skipping missing file: {parameters_csv}")
                 continue
 
-            # ------------------------------------------------------------
-            # 1. Per-sample R/Q or R/C bar charts
-            # ------------------------------------------------------------
+            # Per-sample R/Q or R/C bar charts
             resistance_columns = self.get_element_columns(
                 parameters_csv,
                 "R",
@@ -86,10 +82,8 @@ class AnalysisPlotter:
                     show_alpha=True,
                 )
 
-            # ------------------------------------------------------------
-            # 2. One experiment-level R_i conductivity chart
-            # ------------------------------------------------------------
-            self.plot_ri_conductivity_summary(
+            # One experiment-level R_i conductivity chart
+            self.plot_conductivities_summary(
                 parameters_csv=parameters_csv,
                 circuit_name=circuit_name,
                 experiment_name=experiment.name,
@@ -99,7 +93,7 @@ class AnalysisPlotter:
                 cmap_name="viridis",
             )
 
-    def plot_ri_conductivity_summary(
+    def plot_conductivities_summary(
         self,
         parameters_csv,
         circuit_name,
@@ -110,146 +104,216 @@ class AnalysisPlotter:
         cmap_name="viridis",
     ):
         """
-        Plot one experiment-level bar chart of R_i conductivity.
+        Plot one experiment-level conductivity summary per conductivity type.
 
-        One bar = one sample.
+        One saved image per conductivity column.
 
-        Saved in:
-            exp/fits/plots/
+        Conductivity columns are detected directly from the parameters CSV.
 
         Expected columns:
             sample
+            conductivity_S_cm_<resistance_name>
+            SD_conductivity_S_cm_<resistance_name>
+
+        Example:
             conductivity_S_cm_R_i
             SD_conductivity_S_cm_R_i
+
+            conductivity_S_cm_R_bulk
+            SD_conductivity_S_cm_R_bulk
+
+        Saved in:
+            exp/fits/plots/
         """
 
-        conductivity_col = "conductivity_S_cm_R_i"
-        sd_col = "SD_conductivity_S_cm_R_i"
+        def get_conductivity_label(conductivity_col):
+            """
+            Convert conductivity_S_cm_R_i -> sigma_i
+            Convert conductivity_S_cm_R_bulk -> sigma_bulk
+            """
+
+            resistance_name = conductivity_col.replace(
+                "conductivity_S_cm_",
+                "",
+            )
+
+            if resistance_name.startswith("R_"):
+                suffix = resistance_name.replace("R_", "")
+                return rf"$\sigma_{{\mathrm{{{suffix}}}}}$"
+
+            return rf"$\sigma_{{\mathrm{{{resistance_name}}}}}$"
+
+        def get_output_suffix(conductivity_col):
+            """
+            Convert conductivity_S_cm_R_i -> Ri_conductivity
+            Convert conductivity_S_cm_R_bulk -> Rbulk_conductivity
+            """
+
+            resistance_name = conductivity_col.replace(
+                "conductivity_S_cm_",
+                "",
+            )
+
+            safe_name = resistance_name.replace("_", "")
+
+            return f"{safe_name}_conductivity"
 
         df = pd.read_csv(parameters_csv)
         df = self._clean_numeric_dataframe(df)
 
         if "sample" not in df.columns:
             print(
-                f"Skipping R_i conductivity plot: no sample column in {parameters_csv.name}"
+                "\n"
+                + "\033[93m"
+                + "\033[1m"
+                + ":/"
+                + "\033[0m"
+                + f"  Skipping conductivity plot: no sample column in {parameters_csv.name}"
             )
             return
 
-        if conductivity_col not in df.columns:
+        conductivity_columns = [
+            col
+            for col in df.columns
+            if col.startswith("conductivity_S_cm_") and not col.startswith("SD_")
+        ]
+
+        if not conductivity_columns:
             print(
-                f"Skipping R_i conductivity plot: no {conductivity_col} "
-                f"in {parameters_csv.name}"
+                "\n"
+                + "\033[93m"
+                + "\033[1m"
+                + ":/"
+                + "\033[0m"
+                + f"  Skipping conductivity plot: no conductivity columns found in {parameters_csv.name}"
             )
             return
 
-        values = pd.to_numeric(df[conductivity_col], errors="coerce")
+        save_root.mkdir(parents=True, exist_ok=True)
 
-        valid = values.notna()
-        valid &= np.isfinite(values)
-        valid &= values > 0
+        for conductivity_col in conductivity_columns:
 
-        if "fit_success" in df.columns:
-            fit_success = (
-                df["fit_success"].astype(str).str.lower().isin(["true", "1", "yes"])
-            )
-            valid &= fit_success
+            sd_col = f"SD_{conductivity_col}"
 
-        plot_df = df.loc[valid, ["sample", conductivity_col]].copy()
-
-        if plot_df.empty:
-            print(f"No valid R_i conductivity values found for {circuit_name}")
-            return
-
-        plot_df[conductivity_col] = pd.to_numeric(
-            plot_df[conductivity_col],
-            errors="coerce",
-        )
-
-        if sd_col in df.columns:
-            plot_df[sd_col] = pd.to_numeric(
-                df.loc[valid, sd_col],
+            values = pd.to_numeric(
+                df[conductivity_col],
                 errors="coerce",
             )
-        else:
-            plot_df[sd_col] = np.nan
 
-        samples = plot_df["sample"].astype(str).tolist()
-        conductivities = plot_df[conductivity_col].to_numpy(dtype=float)
-        errors = plot_df[sd_col].to_numpy(dtype=float)
+            valid = values.notna()
+            valid &= np.isfinite(values)
+            valid &= values > 0
 
-        x_values = np.arange(len(samples))
+            if "fit_success" in df.columns:
+                fit_success = (
+                    df["fit_success"].astype(str).str.lower().isin(["true", "1", "yes"])
+                )
+                valid &= fit_success
 
-        # Nice colour degradé.
-        cmap = plt.get_cmap(cmap_name)
-        colours = cmap(np.linspace(0.15, 0.85, len(samples)))
+            plot_columns = ["sample", conductivity_col]
 
-        fig_width = max(8, len(samples) * 0.65)
-        fig, ax = plt.subplots(figsize=(fig_width, 5))
+            if sd_col in df.columns:
+                plot_columns.append(sd_col)
 
-        for xpos, sample, conductivity, error, colour in zip(
-            x_values,
-            samples,
-            conductivities,
-            errors,
-            colours,
-        ):
-            kwargs = {}
+            plot_df = df.loc[valid, plot_columns].copy()
 
-            if np.isfinite(error) and error >= 0 and conductivity - error > 0:
-                kwargs["yerr"] = error
-                kwargs["capsize"] = 5
-            
-            ax.bar(
-                xpos,
-                conductivity,
-                width=0.25,
-                alpha=0.9,
-                color=colour,
-                edgecolor="black",
-                linewidth=1.2,
-                label=sample,
-                **kwargs,
+            if plot_df.empty:
+                print(
+                    "\n"
+                    + "\033[93m"
+                    + "\033[1m"
+                    + ":/"
+                    + "\033[0m"
+                    + f"  No valid values found for {conductivity_col} in {circuit_name}"
+                )
+                continue
+
+            plot_df[conductivity_col] = pd.to_numeric(
+                plot_df[conductivity_col],
+                errors="coerce",
             )
 
-        ax.set_xticks(x_values)
-        ax.set_xticklabels(
-            samples,
-            rotation=45,
-            ha="right",
-            fontsize=11,
-        )
+            if sd_col in plot_df.columns:
+                plot_df[sd_col] = pd.to_numeric(
+                    plot_df[sd_col],
+                    errors="coerce",
+                )
+            else:
+                plot_df[sd_col] = np.nan
 
-        ax.set_ylabel(r"$\sigma_i$ conductivity ($S.cm^{-1}$)", fontsize=14)
-        ax.set_title(
-            rf"{experiment_name} | {circuit_name} | $\sigma_i$ conductivity",
-            fontsize=14,
-        )
+            samples = plot_df["sample"].astype(str).tolist()
+            conductivities = plot_df[conductivity_col].to_numpy(dtype=float)
+            errors = plot_df[sd_col].to_numpy(dtype=float)
 
-        # Automatic y-axis scaling.
-        ax.autoscale(axis="y")
-        ax.margins(y=0.15)
+            x_values = np.arange(len(samples))
 
-        ax.legend(
-            title="Sample",
-            fontsize=9,
-            title_fontsize=10,
-            frameon=False,
-            bbox_to_anchor=(1.02, 1),
-            loc="upper left",
-        )
+            cmap = plt.get_cmap(cmap_name)
+            colours = cmap(np.linspace(0.15, 0.85, len(samples)))
 
-        ax.set_yscale("log")
-        if y_lim != None:
-            ax.set_ylim(*y_lim)
+            fig_width = max(8, len(samples) * 0.65)
+            fig, ax = plt.subplots(figsize=(fig_width, 5))
 
-        fig.tight_layout()
+            for xpos, conductivity, error, colour in zip(
+                x_values,
+                conductivities,
+                errors,
+                colours,
+            ):
+                if not np.isfinite(conductivity) or conductivity <= 0:
+                    continue
 
-        figure_saver.save(
-            save_path=save_root
-            / f"{experiment_name}_{circuit_name}_Ri_conductivity_all_samples",
-            fig=fig,
-            axes={ax},
-        )
+                kwargs = {}
+
+                if np.isfinite(error) and error >= 0 and conductivity - error > 0:
+                    kwargs["yerr"] = error
+                    kwargs["capsize"] = 5
+
+                ax.bar(
+                    xpos,
+                    conductivity,
+                    width=0.25,
+                    alpha=0.9,
+                    color=colour,
+                    edgecolor="black",
+                    linewidth=1.2,
+                    **kwargs,
+                )
+
+            conductivity_label = get_conductivity_label(conductivity_col)
+
+            ax.set_xticks(x_values)
+            ax.set_xticklabels(
+                samples,
+                rotation=45,
+                ha="right",
+                fontsize=11,
+            )
+
+            ax.set_ylabel(
+                conductivity_label + r" conductivity ($\mathrm{S.cm^{-1}}$)",
+                fontsize=14,
+            )
+
+            ax.set_title(
+                rf"{experiment_name} | {circuit_name} | {conductivity_label} conductivity",
+                fontsize=14,
+            )
+
+            ax.set_yscale("log")
+            ax.autoscale(axis="y")
+            ax.margins(y=0.15)
+
+            if y_lim is not None:
+                ax.set_ylim(*y_lim)
+
+            output_suffix = get_output_suffix(conductivity_col)
+
+            figure_saver.save(
+                save_path=save_root
+                / f"{experiment_name}_{circuit_name}_{output_suffix}_all_samples",
+                fig=fig,
+                axes={ax},
+            )
 
     def plot_parameter_bars(
         self,
@@ -312,7 +376,7 @@ class AnalysisPlotter:
         )
 
         if not left_data and not right_data:
-            print(f"No valid parameters found for {sample} | {circuit_name}")
+            print(f"\nNo valid parameters found for {sample} | {circuit_name}")
             return
 
         fig, ax_left = plt.subplots(figsize=(8, 5))
@@ -420,9 +484,6 @@ class AnalysisPlotter:
         colour = style.get("colour", "gray")
         order = style.get("order", float("inf"))
 
-        if is_derived:
-            colour = self.adjust_colour(colour, factor=-0.35)
-
         return order, colour
 
     def get_limits(self, figure_name: str) -> dict:
@@ -461,24 +522,6 @@ class AnalysisPlotter:
         }
 
         return matching_columns
-
-    @staticmethod
-    def adjust_colour(colour, factor=0.2):
-        """
-        Lighten or darken a colour.
-
-        factor > 0 : lighten
-        factor < 0 : darken
-        """
-
-        rgb = np.array(to_rgb(colour))
-
-        if factor >= 0:
-            rgb = rgb + (1 - rgb) * factor
-        else:
-            rgb = rgb * (1 + factor)
-
-        return to_hex(rgb)
 
     @staticmethod
     def get_associated_alpha(param):

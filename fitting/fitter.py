@@ -6,8 +6,8 @@ from impedance.models.circuits import CustomCircuit
 
 import warnings
 
-from eis_fitting.io.readers import EISCSVReader
-from eis_fitting.fitting.fit_metrics import FitMetrics
+from ..io import EISCSVReader
+from .fit_metrics import FitMetrics
 
 
 class EISFitter:
@@ -178,7 +178,7 @@ class EISFitter:
 
         except Exception as exc:
             if full_terminal:
-                print(f"Fit failed: {exc}")
+                print("\033[91m" + "\033[1m" + "/!\\" + "\033[0m" + f"  Fit failed: {exc}")
 
             return {
                 "success": False,

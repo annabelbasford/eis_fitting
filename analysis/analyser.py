@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 
-
 class EISAnalyser:
     def __init__(self, circuits: dict):
         self.circuits = circuits
@@ -15,8 +14,9 @@ class EISAnalyser:
                 continue
 
             self.add_conductivity_columns(
-                parameters_csv,
-                experiment.geometry,
+                parameters_csv=parameters_csv,
+                circuit_name=circuit_name,
+                geometry=experiment.geometry
             )
 
 
@@ -31,7 +31,8 @@ class EISAnalyser:
             and not col.endswith("error")
         }
 
-    def add_conductivity_columns(self, parameters_csv, geometry):
+
+    def add_conductivity_columns(self, parameters_csv, circuit_name, geometry):
         df = pd.read_csv(parameters_csv)
 
         thickness_cm = geometry["thickness_cm"]
@@ -39,19 +40,23 @@ class EISAnalyser:
         area_cm2 = geometry["area_cm2"]
         sd_area_cm2 = geometry["SD_area_cm2"]
 
-        resistance_names = [
-            col
-            for col in df.columns
-            if col.startswith("R")
-            and not col.startswith("SD_")
-            and not col.endswith("error")
-        ]
+        mapping = self.circuits[circuit_name]["mapping"]
+
+        resistance_names = []
+    
+        for raw_name, info in mapping.items():
+        
+            if not raw_name.startswith("R_"):
+                continue
+            
+            if info.get("compute_conductivity", False):
+                resistance_names.append(info["name"])
 
         for resistance_name in resistance_names:
             sd_col = f"SD_{resistance_name}"
 
             if sd_col not in df.columns:
-                print(f"Skipping conductivity for {resistance_name}: no {sd_col}")
+                print(f"\nSkipping conductivity for {resistance_name}: no {sd_col}")
                 continue
 
             conductivity = thickness_cm / (df[resistance_name] * area_cm2)

@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-from eis_fitting.utils.figures import FigureSaver
-from eis_fitting.fitting.fit_metrics import FitMetrics
+from ..utils import FigureSaver
+from ..fitting import FitMetrics
 
 
 class FitPlotter:

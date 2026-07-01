@@ -1,21 +1,20 @@
 from pathlib import Path
 
-
 class ExperimentPaths:
     def __init__(
         self,
-        experiment_root: Path,
-        data_root: Path,
+        experiment_path: Path,
+        data_path: Path,
         output_mode: str = "local",
         output_root: Path | None = None,
     ):
-        self.root = Path(experiment_root)
+        self.root = Path(experiment_path)
 
         # looks redundant but this way we can change how we handle the input more easily later
         # were we to change the data structure
         self.input = self.root
 
-        self.data_root = Path(data_root)
+        self.data_path = Path(data_path)
 
         self.metadata = self.root / "metadata.json"
 
@@ -26,7 +25,7 @@ class ExperimentPaths:
             if output_root is None:
                 raise ValueError("output_root must be provided when output_mode='workspace'.")
 
-            relative_experiment_path = self.root.relative_to(self.data_root)
+            relative_experiment_path = self.root.relative_to(self.data_path)
             self.processed_root = Path(output_root) / relative_experiment_path
 
         else:
@@ -47,51 +46,30 @@ class ExperimentPaths:
 class Experiment:
     def __init__(
         self,
-        path: Path,
-        config: dict,
-        data_root: Path,
-        output_mode: str = "local",
-        output_root: Path | None = None,
+        path,
+        config,
+        data_path,
+        output_mode="workspace",
+        output_root=None,
     ):
         self.paths = ExperimentPaths(
-            experiment_root=path,
-            data_root=data_root,
+            experiment_path=path,
+            data_path=data_path,
             output_mode=output_mode,
             output_root=output_root,
         )
+        
+        self.path = path
         self.config = config
+        self.data_path = data_path
 
-    @property
-    def name(self) -> str:
-        return self.paths.root.name
+        self.name = path.name
+        self.description = config.get("description", "")
 
-    @property
-    def description(self) -> str:
-        return self.config.get("description", "")
+        self.method = config["method"]
+        self.circuits = config["circuits"]
 
-    @property
-    def geometry(self) -> dict:
-        return self.config["geometry"]
-
-    @property
-    def processing(self) -> dict:
-        return self.config.get("processing", {})
-
-    @property
-    def run(self) -> dict:
-        return self.config.get("run", {})
-
-    @property
-    def save_preferences(self) -> dict:
-        return self.config.get(
-            "save_preferences",
-            {
-                "transparent": False,
-                "png": True,
-                "svg": False,
-            },
-        )
-
-    @property
-    def circuits(self) -> list[str]:
-        return self.config.get("circuits", [])
+        self.geometry = config["geometry"]
+        self.run = config["run"]
+        self.save_preferences = config["save_preferences"]
+        self.plotting_limits = config.get("plotting_limits", {})

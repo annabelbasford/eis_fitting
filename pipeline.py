@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from eis_fitting.config.loader import ConfigLoader
-from eis_fitting.core.experiment import Experiment
-from eis_fitting.preprocessing.preprocessor import EISPreprocessor
-from eis_fitting.fitting.fitter import EISFitter
-from eis_fitting.analysis.analyser import EISAnalyser
-from eis_fitting.plotting.plotter import EISPlotter
+from .config import ConfigLoader
+from .core import Experiment
+from .preprocessing import EISPreprocessor
+from .fitting import EISFitter
+from .analysis import EISAnalyser
+from .plotting import EISPlotter
 
 from tqdm import tqdm
 
@@ -13,18 +13,26 @@ from tqdm import tqdm
 class EISPipeline:
     def __init__(
         self,
-        data_root: Path,
+        global_config: dict,
         circuits: dict,
-        output_mode: str = "local",
-        output_root: Path | None = None,
     ):
-        self.data_root = Path(data_root)
+        self.global_config = global_config
         self.circuits = circuits
 
-        self.output_mode = output_mode
-        self.output_root = Path(output_root) if output_root is not None else None
+        paths_config = self.global_config["paths"]
 
-        self.config_loader = ConfigLoader(self.data_root)
+        self.data_path = Path(paths_config["data_path"])
+        self.person = paths_config["user"]
+        self.project = paths_config["project"]
+
+        self.output_mode = paths_config.get("output_mode", "local")
+
+        output_path = paths_config.get("output_path")
+        self.output_root = Path(output_path) if output_path is not None else None
+
+        self.full_terminal = self.global_config.get("full_terminal", True)
+
+        self.config_loader = ConfigLoader(self.global_config)
 
     def load_experiment(self, experiment_path: Path) -> Experiment:
         config = self.config_loader.load_experiment_config(experiment_path)
@@ -32,64 +40,102 @@ class EISPipeline:
         return Experiment(
             path=experiment_path,
             config=config,
-            data_root=self.data_root,
+            data_path=self.data_path,
             output_mode=self.output_mode,
             output_root=self.output_root,
         )
 
-    def run_experiment(self, experiment_path: Path, full_terminal=True) -> None:
+    def run_experiment(self, experiment_path: Path) -> None:
         experiment = self.load_experiment(experiment_path)
 
-        if full_terminal :
-            print(f"\n=== Running experiment: {experiment.name} ===")
-            print(f"Description: {experiment.description}")
-            print(f"Input folder: {experiment.paths.input}")
-            print(f"Processed output: {experiment.paths.processed_root}")
+        run_parameters = experiment.run
 
-        # Preprocesses the data if it doesn't already have a processed folder
-        # or if preplot was required. In which case, no fitting nor analysis will happen afterwards
-        if not experiment.paths.processed_root.is_dir() or experiment.run.get(
-            "pre_plot", True
-        ):
+        if self.full_terminal:
+            print("\033[1m" + f"\n\n# ----- Running experiment: {experiment.name} ----- #\n" + "\033[0m")
+            print("\x1b[4m" + "Description" + "\x1b[24m" + f": {experiment.description}")
+            print("\nInput folder: " + "\x1B[3m" + str(experiment.paths.input) + "\x1B[0m")
+            print(f"Processed output: " + "\x1B[3m" + str(experiment.paths.processed_root) + "\x1B[0m")
+
+        
+        # --------------- Pre-plot / manual-cleaning mode --------------- #
+        
+        # If pre_plot is true, we preprocess and generate raw Bode plots,
+        # then stop before fitting.
+        if run_parameters.get("pre_plot", False):
             EISPreprocessor().run(experiment)
 
-        # only proceeds if no pre_plotting was required and "fits" folder hasn't been created yet
-        if (
-            not experiment.run.get("pre_plot", False)
-            and not experiment.paths.fits.is_dir()
-        ):
-            # note that the Bode and Nyquist plotting in EISFitter does
-            # check the experiment.run.get("plot") during it's execution
-            all_fit_data = EISFitter(self.circuits).run(experiment, full_terminal)
+            if self.full_terminal:
+                print("Pre-plot mode enabled")
+                print("Stopping before fitting so clean CSVs can be edited by hand")
+
+            return
+
+        
+        # --------------- Normal preprocessing --------------- #
+        
+        # If the experiment has never been processed, preprocess it.
+        if not experiment.paths.processed_root.is_dir():
+            EISPreprocessor().run(experiment)
+
+        
+        # --------------- Fitting --------------- #
+        
+        all_fit_data = None
+
+        if run_parameters.get("fit", True):
+
+            if not experiment.paths.fits.is_dir():
+
+                all_fit_data = EISFitter(self.circuits).run(
+                    experiment,
+                    full_terminal=self.full_terminal,
+                )
+
+            else:
+                if self.full_terminal:
+                    print("Fits folder already exists. Skipping fitting.")
+
+        
+        # --------------- Analysis and plotting --------------- #
+
+        
+        # Analysis can be run from newly generated fits or existing fit CSVs.
+        if experiment.paths.fits.is_dir():
 
             EISAnalyser(self.circuits).run(experiment)
 
-            if experiment.run.get("plot", True):
-                plotting_limits = None
+            # --------------- Plotting --------------- #
+            if run_parameters.get("plot", True) and not experiment.paths.plots.is_dir():
 
                 EISPlotter(
                     self.circuits,
-                    plotting_limits=plotting_limits,
+                    plotting_limits=experiment.plotting_limits,
                 ).run(
                     experiment=experiment,
                     all_fit_data=all_fit_data,
                     plot_fits=all_fit_data is not None,
                     plot_analysis=True,
-                    display_chi_square=True
+                    plot_residuals=run_parameters.get("plot_residuals", True),
+                    display_chi_square=run_parameters.get("display_chi_square", True),
                 )
 
-    def run_project(self, person: str, project: str, full_terminal = True) -> None:
-        project_path = self.data_root / person / project
+        else:
+            print("No fits folder found. Skipping analysis and plotting.")
+
+    def run_project(self) -> None:
+        project_path = self.data_path / self.person / self.project
 
         if not project_path.exists():
             raise FileNotFoundError(f"Project folder not found: {project_path}")
 
-        # tqdm library for the terminal loading bar
-        for experiment_path in tqdm(sorted(project_path.iterdir()), unit="sample"):
+        for experiment_path in tqdm(
+            sorted(project_path.iterdir()),
+            unit="experiment",
+        ):
             if not experiment_path.is_dir():
                 continue
 
             if not (experiment_path / "metadata.json").exists():
                 continue
 
-            self.run_experiment(experiment_path, full_terminal)
+            self.run_experiment(experiment_path)

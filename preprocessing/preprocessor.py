@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import shutil
 
-from eis_fitting.io.readers import BioLogicConverter
+from ..io import BioLogicConverter
 
 # Cleaner for metrohm-issued .csv files
 class MetrohmCSVCleaner:

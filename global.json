@@ -1,8 +1,8 @@
 {
     "paths": {
         "data_path": "/home/enzos/data/",
-        "user": "femke",
-        "project": "EIS_hydrogels",
+        "user": "enzo",
+        "project": "test",
         "output_mode": "workspace",
         "output_path": "/home/enzos/data_processed"
     },
@@ -13,6 +13,11 @@
         "plot": true,
         "plot_residuals": true,
         "display_chi_square": true
+    },
+    "save_preferences": {
+        "transparent": false,
+        "png": true,
+        "svg": false
     },
     "plotting_limits": {
         "R_and_Q": {

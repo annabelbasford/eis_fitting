@@ -12,6 +12,7 @@ CIRCUITS = {
             "R_1": {
                 "name": "R_i",
                 "colour": "#80D4F8",
+                "compute_conductivity": True,
                 "order": 0,
             },
             "R_2": {
@@ -51,11 +52,13 @@ CIRCUITS = {
             "R_3": {
                 "name": "R_i",
                 "colour": "#80D4F8",
+                "compute_conductivity": True,
                 "order": 0,
             },
             "R_2": {
                 "name": "R_e",
                 "colour": "#F37F8C",
+                "compute_conductivity": True,
                 "order": 1,
             },
             "CPE_1_0": {
@@ -83,29 +86,29 @@ CIRCUITS = {
     "circuit_3": {
         "string": "p(R_1,CPE_1)-p(R_2,CPE_2)-CPE_3",
         "guess": [
-            100,  # R_1 / R_b
-            1e-6,  # CPE_1_0 / Q_b
-            0.9,  # CPE_1_1 / alpha_b
+            100,  # R_grain
+            1e-6,  # Q_grain
+            0.9,  # alpha_grain
             1000,  # R_2 / R_gb
             1e-6,  # CPE_2_0 / Q_gb
             0.8,  # CPE_2_1 / alpha_gb
             1e-5,  # CPE_3_0 / Q_dl
             0.9,  # CPE_3_1 / alpha_dl
         ],
-        "r_for_conductivity": "R_1",
         "mapping": {
             "R_1": {
-                "name": "R_b",
+                "name": "R_grain",
                 "colour": "#80D4F8",
                 "order": 0,
+                "compute_conductivity": True,
             },
             "CPE_1_0": {
-                "name": "Q_b",
+                "name": "Q_grain",
                 "colour": "#7C84C2",
                 "order": 0,
             },
             "CPE_1_1": {
-                "name": "alpha_b",
+                "name": "alpha_grain",
                 "colour": "#7C84C2",
                 "order": 0,
             },
@@ -158,6 +161,7 @@ CIRCUITS = {
                 "colour": "#F37F8C",
                 "order": 1,
                 "use_for_conductivity": True,
+                "compute_conductivity": True,
             },
             "CPE_1_0": {
                 "name": "Q_g",
@@ -192,8 +196,18 @@ CIRCUITS = {
             0.9,  # CPE_2_1 = alpha_DL
         ],
         "mapping": {
-            "R_1": {"name": "R_i", "colour": "#80D4F8", "order": 0},
-            "R_2": {"name": "R_bulk", "colour": "#69BC86", "order": 1},
+            "R_1": {
+                "name": "R_i",
+                "colour": "#80D4F8",
+                "order": 0,
+                "compute_conductivity": True,
+            },
+            "R_2": {
+                "name": "R_bulk",
+                "colour": "#69BC86",
+                "order": 1,
+                "compute_conductivity": True,
+            },
             "CPE_1_0": {"name": "Q_bulk", "colour": "#F49A80", "order": 1},
             "CPE_1_1": {"name": "alpha_bulk", "colour": "#F49A80", "order": 1},
             "CPE_2_0": {"name": "Q_DL", "colour": "#7C84C2", "order": 2},
