@@ -65,16 +65,7 @@ class EISPipeline:
             EISAnalyser(self.circuits).run(experiment)
 
             if experiment.run.get("plot", True):
-                plotting_limits = {
-                    "R_and_Q": {
-                        "left_ylim": (1e-1, 1e15),
-                        "right_ylim": (1e-12, 1e-2),
-                    },
-                    "conductivities": {
-                        "left_ylim": (1e-10, 1e-4),
-                        "right_ylim": None,
-                    },
-                }
+                plotting_limits = None
 
                 EISPlotter(
                     self.circuits,
@@ -93,6 +84,7 @@ class EISPipeline:
         if not project_path.exists():
             raise FileNotFoundError(f"Project folder not found: {project_path}")
 
+        # tqdm library for the terminal loading bar
         for experiment_path in tqdm(sorted(project_path.iterdir()), unit="sample"):
             if not experiment_path.is_dir():
                 continue

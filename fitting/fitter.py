@@ -7,6 +7,7 @@ from impedance.models.circuits import CustomCircuit
 import warnings
 
 from eis_fitting.io.readers import EISCSVReader
+from eis_fitting.fitting.fit_metrics import FitMetrics
 
 
 class EISFitter:
@@ -14,7 +15,7 @@ class EISFitter:
         self.circuits = circuits
         self.reader = EISCSVReader()
 
-    def run(self, experiment, full_terminal = True) -> None:
+    def run(self, experiment, full_terminal=True) -> None:
         output_folder = experiment.paths.fits
         pre_plot_folder = experiment.paths.pre_plots
 
@@ -38,7 +39,7 @@ class EISFitter:
 
         for csv_path in csv_files:
             sample_name = csv_path.stem
-            if full_terminal :
+            if full_terminal:
                 print(f"\nFitting: {sample_name}")
 
             freq, z = self.reader.read_impedance(csv_path)
@@ -50,7 +51,7 @@ class EISFitter:
                     circuit_info=circuit_info,
                     freq=freq,
                     z=z,
-                    full_terminal=full_terminal
+                    full_terminal=full_terminal,
                 )
 
                 all_results.append(result["row"])
@@ -70,12 +71,14 @@ class EISFitter:
 
         return all_fit_data
 
-    def _fit_one(self, sample_name, circuit_name, circuit_info, freq, z, full_terminal = True):
+    def _fit_one(
+        self, sample_name, circuit_name, circuit_info, freq, z, full_terminal=True
+    ):
         circuit_string = circuit_info["string"]
         initial_guess = circuit_info["guess"]
         circuit_mapping = circuit_info["mapping"]
 
-        if full_terminal :
+        if full_terminal:
             print(f"  Trying circuit: {circuit_name}")
 
         try:
@@ -87,21 +90,33 @@ class EISFitter:
 
             with warnings.catch_warnings():
                 warnings.filterwarnings(
-                    "ignore", message="Covariance computation failed"
+                    "ignore",
+                    message="Covariance computation failed",
                 )
                 circuit.fit(freq, z, weight_by_modulus=True)
 
             z_fit = circuit.predict(freq)
 
-            chi_square, reduced_chi_square = self.compute_chi_square(
+            n_parameters = len(circuit.parameters_)
+
+            chi_square = FitMetrics.chi_square(
                 Z_exp=z,
                 Z_fit=z_fit,
-                n_parameters=len(circuit.initial_guess),
+                relative=True,
+            )
+
+            reduced_chi_square = FitMetrics.reduced_chi_square(
+                Z_exp=z,
+                Z_fit=z_fit,
+                n_parameters=n_parameters,
                 relative=True,
             )
 
             param_names = circuit.get_param_names()[0]
-            mapped_names = [circuit_mapping[param]["name"] for param in param_names]
+            mapped_names = [
+                circuit_mapping[param]["name"]
+                for param in param_names
+            ]
 
             row = {
                 "sample": sample_name,
@@ -115,10 +130,45 @@ class EISFitter:
             for name, value in zip(mapped_names, circuit.parameters_):
                 row[name] = value
 
-            if hasattr(circuit, "conf_"):
-                for name, sd in zip(mapped_names, circuit.conf_):
+            # Reject fits for which at least one fitted parameter has
+            # a standard error larger than 100% of the fitted value.
+            bad_parameters = []
+
+            if hasattr(circuit, "conf_") and circuit.conf_ is not None:
+
+                for name, value, sd in zip(
+                    mapped_names,
+                    circuit.parameters_,
+                    circuit.conf_,
+                ):
                     row[f"SD_{name}"] = sd
-                    row[f"{name}_percent_error"] = 100 * sd / row[name]
+
+                    if (
+                        value == 0
+                        or not np.isfinite(value)
+                        or not np.isfinite(sd)
+                    ):
+                        percent_error = np.inf
+                    else:
+                        percent_error = abs(100 * sd / value)
+
+                    row[f"{name}_percent_error"] = percent_error
+
+                    if percent_error > 100:
+                        bad_parameters.append(
+                            f"{name}: {percent_error:.1f}%"
+                        )
+
+            else:
+                raise RuntimeError(
+                    "Fit rejected: covariance/standard errors unavailable"
+                )
+
+            if bad_parameters:
+                raise RuntimeError(
+                    "Fit rejected: parameter uncertainty above 100% for "
+                    + ", ".join(bad_parameters)
+                )
 
             return {
                 "success": True,
@@ -127,7 +177,7 @@ class EISFitter:
             }
 
         except Exception as exc:
-            if full_terminal :
+            if full_terminal:
                 print(f"Fit failed: {exc}")
 
             return {
@@ -174,6 +224,10 @@ class EISFitter:
             "covariance_warning",
             "chi_square",
             "reduced_chi_square",
+            "mean_real_residual_percent",
+            "mean_imag_residual_percent",
+            "mean_abs_residual_percent",
+            "max_abs_residual_percent",
             "omega_max",
             "error",
         ]
@@ -219,7 +273,7 @@ class EISFitter:
 
             save_path = output_folder / f"{experiment_name}_{circuit_name}.csv"
 
-            circuit_df.to_csv(save_path, index=False)
+            circuit_df.to_csv(save_path, index=False, float_format="%.10e")
 
     def _get_circuit_parameter_columns(
         self,
@@ -252,53 +306,3 @@ class EISFitter:
                 parameter_columns.append(display_name)
 
         return parameter_columns
-
-    @staticmethod
-    def compute_chi_square(Z_exp, Z_fit, n_parameters, relative=True):
-        """
-        Compute chi-square and reduced chi-square for a complex EIS fit.
-        Parameters
-        ----------
-        Z_exp : array-like of complex
-            Experimental impedance values.
-        Z_fit : array-like of complex
-            Fitted/model impedance values.
-        n_parameters : int
-            Number of fitted circuit parameters.
-        relative : bool
-            If True, normalize residuals by |Z_exp|².
-            This is usually more useful for EIS because impedance magnitude
-            can vary strongly across frequency. Also the reason why we fit with
-            "weight_by_modulus"=True
-        Returns
-        -------
-        chi_square : float
-            Chi-square value.
-        reduced_chi_square : float
-            Chi-square divided by degrees of freedom.
-        """
-        Z_exp = np.asarray(Z_exp, dtype=complex)
-        Z_fit = np.asarray(Z_fit, dtype=complex)
-        residual = Z_exp - Z_fit
-        residual_squared = residual.real**2 + residual.imag**2
-        if relative:
-            denominator = np.abs(Z_exp) ** 2
-            valid = (
-                np.isfinite(residual_squared)
-                & np.isfinite(denominator)
-                & (denominator > 0)
-            )
-            chi_terms = residual_squared[valid] / denominator[valid]
-        else:
-            valid = np.isfinite(residual_squared)
-            chi_terms = residual_squared[valid]
-        n_valid_points = np.sum(valid)
-        if n_valid_points == 0:
-            return np.nan, np.nan
-        chi_square = np.sum(chi_terms)
-        degrees_of_freedom = (2 * n_valid_points) - n_parameters
-        if degrees_of_freedom <= 0:
-            reduced_chi_square = np.nan
-        else:
-            reduced_chi_square = chi_square / degrees_of_freedom
-        return chi_square, reduced_chi_square

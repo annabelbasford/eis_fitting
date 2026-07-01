@@ -7,6 +7,7 @@ import shutil
 
 from eis_fitting.io.readers import BioLogicConverter
 
+# Cleaner for metrohm-issued .csv files
 class MetrohmCSVCleaner:
     SECTION_MAP = {
         "bodephase": "bode",
@@ -146,7 +147,7 @@ class MetrohmCSVCleaner:
 
         return float(value)
 
-
+# Measurements are often carried out by successive sweeps that need to be sliced before fitting
 class FrequencySplitter:
     def split_folder(self, input_folder: Path) -> None:
         for input_file in input_folder.glob("*.csv"):
@@ -189,7 +190,7 @@ class FrequencySplitter:
 
         input_file.unlink()
 
-
+# to manually check for outliers and make an overall review of the dataset
 class PreprocessPlotter:
     def plot_folder(self, input_folder: Path, output_folder: Path) -> None:
         output_folder.mkdir(parents=True, exist_ok=True)

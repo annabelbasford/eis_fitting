@@ -1,0 +1,37 @@
+{
+    "paths": {
+        "data_path": "/home/enzos/data/",
+        "user": "femke",
+        "project": "EIS_hydrogels",
+        "output_mode": "workspace",
+        "output_path": "/home/enzos/data_processed"
+    },
+    "run": {
+        "pre_plot": false,
+        "multi_initial_guesses": true,
+        "fit": true,
+        "plot": true,
+        "plot_residuals": true,
+        "display_chi_square": true
+    },
+    "plotting_limits": {
+        "R_and_Q": {
+            "left_ylim": [
+                1e-1,
+                1e15
+            ],
+            "right_ylim": [
+                1e-12,
+                1e-2
+            ]
+        },
+        "conductivities": {
+            "left_ylim": [
+                1e-10,
+                1e-4
+            ],
+            "right_ylim": null
+        }
+    },
+    "full_terminal": true
+}

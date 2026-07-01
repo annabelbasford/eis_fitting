@@ -50,7 +50,7 @@ class EISPlotter:
             self.plot_fit_results(
                 experiment=experiment,
                 all_fit_data=all_fit_data,
-                display_chi_square=display_chi_square
+                display_chi_square=display_chi_square,
             )
 
         if plot_analysis:
@@ -58,10 +58,8 @@ class EISPlotter:
                 experiment=experiment,
             )
 
+    # Plot Nyquist/Bode overlays from in-memory fit results.
     def plot_fit_results(self, experiment, all_fit_data, display_chi_square) -> None:
-        """
-        Plot Nyquist/Bode overlays from in-memory fit results.
-        """
 
         if not all_fit_data:
             print("No fit data available for plotting.")
@@ -111,7 +109,7 @@ class EISPlotter:
                     z=data["Z"],
                     z_fit=data["Z_fit"],
                     title=f"{sample_name} | {circuit_name}",
-                    save_path=(
+                    save_folder=(
                         circuit_plot_folder / f"{sample_name}_{circuit_name}_nyquist"
                     ),
                     chi_square=chi_square,
@@ -123,8 +121,21 @@ class EISPlotter:
                     z=data["Z"],
                     z_fit=data["Z_fit"],
                     title=f"{sample_name} | {circuit_name}",
-                    save_path=(
+                    save_folder=(
                         circuit_plot_folder / f"{sample_name}_{circuit_name}_bode"
+                    ),
+                    chi_square=chi_square,
+                    reduced_chi_square=reduced_chi_square,
+                )
+
+                fit_plotter.plot_residuals(
+                    frequencies=data["freq"],
+                    Z_exp=data["Z"],
+                    Z_fit=data["Z_fit"],
+                    sample=sample_name,
+                    circuit_name=circuit_name,
+                    save_folder=(
+                        circuit_plot_folder / f"{sample_name}_{circuit_name}_residuals"
                     ),
                     chi_square=chi_square,
                     reduced_chi_square=reduced_chi_square,
@@ -136,15 +147,14 @@ class EISPlotter:
             fit_plotter=fit_plotter,
         )
 
+    # Plot combined all-sample Bode and Nyquist plots for each circuit.
+
     def plot_all_runs(
         self,
         experiment,
         all_fit_data,
         fit_plotter,
     ) -> None:
-        """
-        Plot combined all-sample Bode and Nyquist plots for each circuit.
-        """
 
         all_runs_folder = experiment.paths.plots / "all_runs"
 

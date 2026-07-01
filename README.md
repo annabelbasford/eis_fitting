@@ -146,7 +146,7 @@ data/
 The experiment folder should contain only:
 
 - the experiment `metadata.json`;
-- raw experimental files, such as `.csv`, `.mpr`, or `.MPR`.
+- raw experimental files, such as `.csv`or `.mpr`.
 
 It should not contain manually created fitting, analysis, or plotting folders. These are created automatically by the pipeline.
 
@@ -227,10 +227,11 @@ Workspace mode is recommended for larger projects because the original raw data 
 
 ## 6. Metadata and method files
 
-The current architecture uses two JSON files:
+The current architecture uses three JSON files:
 
-1. an **experiment metadata file**;
-2. a reusable **method file**.
+1. a **global configuration file**
+2. an **experiment metadata file**;
+3. a reusable **method file** .
 
 The experiment metadata file defines what should be run for a specific experiment.
 
@@ -354,8 +355,8 @@ from eis_fitting.pipeline import EISPipeline
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_ROOT = PROJECT_ROOT / "data"
 
-PERSON = "femke"
-PROJECT = "MV"
+PERSON = "bel"
+PROJECT = "shoebox"
 
 OUTPUT_MODE = "workspace"
 OUTPUT_ROOT = PROJECT_ROOT / "data_processed"
@@ -442,7 +443,7 @@ analysis plots
 
 ### 8.3 Fitting without plotting
 
-If plotting is disabled in the current configuration, the fitter can be used to generate only the fitted CSV files.
+If plotting is disabled in the current configuration, the fitter can be used to generate the csv file of fitted parameters without plotting.
 
 ```json
 "plot": false
@@ -540,9 +541,11 @@ CIRCUITS = {
  In this case, the equivalent circuit is as follows with an example of proper fitting.
 
 <p align="center">
-  <img src="./ressources/DK_circuit_1_bar.png" height="300">
-  <img src="./ressources/DK_circuit_1_bode.png" height="300">
+  <img src="./resources/DK_circuit_1_bar.png" height="300">
+  <img src="./resources/DK_circuit_1_bode.png" height="300">
 </p>
+
+> Note that the names displayed in the parameter bars does not follow the `impedance.py` string naming convention but an intuitive mapping detailed in further sections.
 
 ### Circuit syntax
 
@@ -560,16 +563,16 @@ The circuit syntax follows the `impedance.py` `CustomCircuit` convention.
 
 For each selected circuit and each sample, the fitter:
 
-1. reads the processed EIS CSV;
-2. builds the complex impedance array;
-3. creates a `CustomCircuit`;
-4. fits the circuit using the supplied initial guesses;
-5. predicts the fitted impedance;
-6. extracts fitted parameters;
-7. calculates standard deviations and percentage errors where possible;
-8. calculates chi-square and reduced chi-square;
-9. saves the result to a circuit-specific CSV;
-10. generates fitted Bode and Nyquist plots if plotting is enabled.
+1. reads the processed experimental EIS CSV
+2. builds the complex impedance array
+3. creates a `CustomCircuit`
+4. fits the circuit using the supplied initial guesses
+5. predicts the fitted impedance
+6. extracts fitted parameters
+7. calculates standard deviations and percentage errors where possible
+8. calculates chi-square and reduced chi-square
+9. saves the result to a circuit-specific CSV
+10. generates fitted Bode and Nyquist plots if plotting is enabled
 
 ---
 
@@ -584,7 +587,7 @@ reduced_chi_square
 
 The chi-square value quantifies the difference between experimental and fitted impedance values.
 
-For complex EIS data, the residual contains both real and imaginary parts:
+For complex EIS data, the residual contains both real (*Z'*) and imaginary (*Z''*) parts:
 
 ```text
 Z = Z' + jZ''
@@ -594,11 +597,11 @@ The reduced chi-square is normalised by the degrees of freedom and is more usefu
 
 However, chi-square and reduced chi-square are not used as the only criteria for model selection. Equivalent circuits must also be judged by:
 
-- visual agreement in Nyquist and Bode plots;
-- absence of systematic residuals;
-- reasonable parameter values;
-- parameter uncertainty;
-- physical meaning of the circuit elements;
+- visual agreement in Nyquist and Bode plots
+- absence of systematic residuals
+- reasonable parameter values
+- parameter uncertainty
+- physical meaning of the circuit elements
 - avoidance of unnecessary overfitting.
 
 The fitted Bode and Nyquist plots can display both `chi_square` and `reduced_chi_square` directly on the figure.
@@ -629,16 +632,20 @@ reduced_chi_square
 R_i
 SD_R_i
 R_i_percent_error
-Q_h
-SD_Q_h
-Q_h_percent_error
-alpha_h
-SD_alpha_h
-alpha_h_percent_error
-R_h
-SD_R_h
-R_h_percent_error
+Q_DL
+SD_Q_DL
+Q_DL_percent_error
+alpha_DL
+SD_alpha_DL
+alpha_DL_percent_error
+R_e
+SD_R_E
+R_e_percent_error
 ```
+
+<p align="center">
+  <img src="./resources/circuit.png" height="300">
+</p>
 
 Different circuits may have different columns, depending on the circuit elements.
 
@@ -681,9 +688,9 @@ length = sample thickness in cm
 
 The uncertainty is propagated from:
 
-- thickness uncertainty;
-- area uncertainty;
-- resistance uncertainty.
+- thickness uncertainty
+- area uncertainty
+- resistance uncertainty
 
 The analyser writes:
 
@@ -717,9 +724,9 @@ Created during preprocessing when `pre_plot` is enabled.
 
 Typical plots:
 
-- raw Bode plot;
-- raw Nyquist plot;
-- split-frequency inspection plots.
+- raw Bode plot
+- raw Nyquist plot
+- split-frequency inspection plots
 
 These are useful for identifying bad frequency ranges, outliers, or corrupted data before fitting.
 
@@ -733,8 +740,8 @@ fits/plots/<sample>/<circuit>/<sample>_<circuit>_bode_fit.png
 
 These show:
 
-- experimental impedance magnitude and phase;
-- fitted circuit response;
+- experimental impedance magnitude and phase
+- fitted circuit response
 - chi-square and reduced chi-square, if available.
 
 ### 15.3 Fitted Nyquist plots
@@ -747,8 +754,8 @@ fits/plots/<sample>/<circuit>/<sample>_<circuit>_nyquist_fit.png
 
 These show:
 
-- experimental complex impedance;
-- fitted complex impedance;
+- experimental complex impedance
+- fitted complex impedance
 - chi-square and reduced chi-square, if available.
 
 ### 15.4 Parameter bar charts
@@ -775,10 +782,10 @@ fits/plots/<experiment>_<circuit>_Ri_conductivity_all_samples.png
 
 This plot contains:
 
-- one bar per sample;
-- conductivity calculated from `R_i`;
-- optional error bars;
-- automatic y-axis scaling;
+- one bar per sample
+- conductivity calculated from `R_i`
+- optional error bars
+- automatic y-axis scaling
 - a colour gradient across samples.
 
 The conductivity plot is saved directly in:
@@ -890,13 +897,13 @@ full_terminal = True
 
 This is useful for debugging because it allows the workflow to print:
 
-- selected experiment;
-- selected circuits;
-- preprocessing status;
-- fitting status;
-- failed fits;
-- covariance warnings;
-- skipped files;
+- selected experiment
+- selected circuits
+- preprocessing status
+- fitting status
+- failed fits
+- covariance warnings
+- skipped files
 - saved output paths.
 
 For large batch runs, a quieter mode can be used to reduce terminal output by calling `pipeline.run_project(person=PERSON, project=PROJECT, full_terminal=False)` in `main.py`
@@ -905,7 +912,7 @@ For large batch runs, a quieter mode can be used to reduce terminal output by ca
 
 The fitting workflow can use `tqdm` progress bars to show fitting progress across samples and circuits.
 
-This is useful for long experiments with many samples or several circuits.
+This is useful for long experiments with many samples or several circuits
 
 ---
 
@@ -924,12 +931,12 @@ error
 
 A fit may be marked as failed if:
 
-- the optimizer fails;
-- fitted parameters are not finite;
-- covariance cannot be estimated;
-- the fitted result contains unphysical values;
-- the circuit prediction fails;
-- the fit raises an exception.
+- the optimizer fails
+- fitted parameters are not finite
+- covariance cannot be estimated
+- the fitted result contains unphysical values
+- the circuit prediction fails
+- the fit raises an exception
 
 When covariance cannot be estimated, the result should be handled carefully because the fitted values may look reasonable while the uncertainty is not reliable.
 
@@ -1009,11 +1016,11 @@ The workflow will fit the selected circuits and create fit plots.
 
 Inspect:
 
-- fitted Nyquist plots;
-- fitted Bode plots;
-- chi-square and reduced chi-square;
-- parameter uncertainties;
-- whether fitted parameters are physically meaningful.
+- fitted Nyquist plots
+- fitted Bode plots
+- chi-square and reduced chi-square
+- parameter uncertainties
+- whether fitted parameters are physically meaningful
 
 ### Step 6: Inspect conductivity
 
@@ -1045,10 +1052,10 @@ then the expected fit CSV does not exist.
 
 Check that:
 
-- the circuit name exists in `metadata.json`;
-- the circuit was successfully fitted;
-- the output folder is correct;
-- workspace/local mode points to the expected location.
+- the circuit name exists in `metadata.json`
+- the circuit was successfully fitted
+- the output folder is correct
+- workspace/local mode points to the expected location
 
 ### CPE values appear as `0.0`
 
@@ -1112,19 +1119,19 @@ and treated cautiously.
 
 The current object-oriented version supports:
 
-- local and workspace data modes;
-- metadata-driven experiment configuration;
-- preprocessing and pre-plotting;
-- multi-circuit fitting;
-- one fitted-parameter CSV per circuit;
-- circuit-specific parameter columns;
-- chi-square and reduced chi-square calculation;
-- fitted Bode and Nyquist plotting;
-- per-sample R/Q or R/C parameter plots;
-- R_i-based conductivity calculation;
-- experiment-level conductivity summary plots;
-- configurable plot limits;
-- configurable figure saving;
-- progress bars and terminal output options.
+- local and workspace data modes
+- metadata-driven experiment configuration
+- preprocessing and pre-plotting
+- multi-circuit fitting
+- one fitted-parameter CSV per circuit
+- circuit-specific parameter columns
+- chi-square and reduced chi-square calculation
+- fitted Bode and Nyquist plotting
+- per-sample R/Q or R/C parameter plots
+- R_i-based conductivity calculation
+- experiment-level conductivity summary plots
+- configurable plot limits
+- configurable figure saving
+- progress bars and terminal output options
 
 This version is intended as a robust research workflow before packaging the project as a reusable Python library.

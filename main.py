@@ -3,12 +3,13 @@ from pathlib import Path
 from eis_fitting.circuits import CIRCUITS
 from eis_fitting.pipeline import EISPipeline
 
+# adapt the number of .parent calls to your architecture
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_ROOT = PROJECT_ROOT / "data"
 
 # pipeline.run_project will take these as arguments to formate input directory path data_root / person / project
-PERSON = "femke"
-PROJECT = "MV"
+PERSON = "laura"
+PROJECT = "eis_fitting"
 
 """
 Two output modes are available :
@@ -26,7 +27,6 @@ OUTPUT_ROOT = PROJECT_ROOT / "data_processed"
 
 
 def main():
-    # initialisation
     pipeline = EISPipeline(
         data_root=DATA_ROOT,
         circuits=CIRCUITS,

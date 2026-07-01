@@ -5,6 +5,7 @@ import numpy as np
 import seaborn as sns
 
 from eis_fitting.utils.figures import FigureSaver
+from eis_fitting.fitting.fit_metrics import FitMetrics
 
 
 class FitPlotter:
@@ -24,7 +25,7 @@ class FitPlotter:
         z,
         z_fit,
         title,
-        save_path,
+        save_folder,
         chi_square=None,
         reduced_chi_square=None,
     ):
@@ -65,7 +66,7 @@ class FitPlotter:
             reduced_chi_square=reduced_chi_square,
         )
         self.figure_saver.save(
-            save_path=save_path,
+            save_path=save_folder,
             fig=fig,
             axes={ax},
         )
@@ -76,7 +77,7 @@ class FitPlotter:
         z,
         z_fit,
         title,
-        save_path,
+        save_folder,
         chi_square=None,
         reduced_chi_square=None,
     ):
@@ -153,7 +154,7 @@ class FitPlotter:
         )
 
         self.figure_saver.save(
-            save_path=save_path,
+            save_path=save_folder,
             fig=fig,
             axes={axes[0], axes[1]},
         )
@@ -337,6 +338,123 @@ class FitPlotter:
             save_path=save_folder / f"all_files_{circuit_name}_bode",
             fig=fig,
             axes={axes[0], axes[1]},
+        )
+
+    def plot_residuals(
+        self,
+        frequencies,
+        Z_exp,
+        Z_fit,
+        sample,
+        circuit_name,
+        save_folder,
+        chi_square=None,
+        reduced_chi_square=None,
+        invert_frequency_axis=True,
+    ):
+        """
+        Plot relative residuals for one fitted EIS spectrum.
+
+        The plot contains:
+        - real relative residuals
+        - imaginary relative residuals
+        - absolute relative residuals
+
+        Residuals are expressed in percent and normalised by |Z_exp|.
+        """
+
+        frequencies = np.asarray(frequencies, dtype=float)
+        Z_exp = np.asarray(Z_exp, dtype=complex)
+        Z_fit = np.asarray(Z_fit, dtype=complex)
+
+        residuals = FitMetrics.relative_residuals_percent(
+            Z_exp=Z_exp,
+            Z_fit=Z_fit,
+        )
+
+        valid = residuals["valid"] & np.isfinite(frequencies) & (frequencies > 0)
+
+        if not np.any(valid):
+            print(
+                f"Skipping residual plot for {sample} | {circuit_name}: no valid data."
+            )
+            return
+
+        frequencies = frequencies[valid]
+        real_residual = residuals["real_percent"][valid]
+        imag_residual = residuals["imag_percent"][valid]
+        abs_residual = residuals["abs_percent"][valid]
+
+        fig, (ax_signed, ax_abs) = plt.subplots(
+            2,
+            1,
+            figsize=(7, 6),
+            sharex=True,
+        )
+
+        ax_signed.semilogx(
+            frequencies,
+            real_residual,
+            "o-",
+            markersize=4,
+            linewidth=1.2,
+            label=r"$Z'$ residual",
+        )
+
+        ax_signed.semilogx(
+            frequencies,
+            imag_residual,
+            "s-",
+            markersize=4,
+            linewidth=1.2,
+            label=r"$Z''$ residual",
+        )
+
+        ax_signed.axhline(
+            0,
+            linestyle="--",
+            linewidth=1,
+            color="black",
+        )
+
+        ax_signed.set_ylabel("Signed residual (%)", fontsize=12)
+        ax_signed.legend(frameon=False)
+        ax_signed.set_title(f"{sample} | {circuit_name} | residuals")
+
+        ax_abs.semilogx(
+            frequencies,
+            abs_residual,
+            "o-",
+            markersize=4,
+            linewidth=1.2,
+            label=r"$|Z|$ residual",
+        )
+
+        ax_abs.axhline(
+            0,
+            linestyle="--",
+            linewidth=1,
+            color="black",
+        )
+
+        ax_abs.set_xlabel("Frequency (Hz)", fontsize=12)
+        ax_abs.set_ylabel("Absolute residual (%)", fontsize=12)
+        ax_abs.legend(frameon=False)
+
+        if invert_frequency_axis:
+            ax_signed.invert_xaxis()
+            ax_abs.invert_xaxis()
+
+        self._add_fit_statistics_box(
+            ax=ax_signed,
+            chi_square=chi_square,
+            reduced_chi_square=reduced_chi_square,
+        )
+
+        self.figure_saver.save(
+            save_path=save_folder,
+            fig=fig,
+            axes={ax_signed, ax_abs},
         )
 
     def _add_fit_statistics_box(
