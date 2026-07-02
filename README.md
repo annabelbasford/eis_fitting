@@ -14,7 +14,16 @@ The workflow is organised around a small set of object-oriented components:
 main.py
     │
     ▼
+global.json
+    │
+    ▼
 EISPipeline
+    │
+    ├── ConfigLoader
+    │       ├── reads the root-level global configuration
+    │       ├── reads experiment-level metadata.json files
+    │       ├── reads reusable method files from data/_methods/
+    │       └── merges these settings into an Experiment object
     │
     ├── EISPreprocessor
     │       ├── cleans raw EIS files
@@ -26,12 +35,14 @@ EISPipeline
     │       ├── fits selected equivalent circuits
     │       ├── saves one fitted-parameter CSV per circuit
     │       ├── calculates chi-square and reduced chi-square
-    │       └── creates fitted Bode and Nyquist plots
+    │       ├── calculates residuals and fitted-parameter uncertainties
+    │       └── rejects non-identifiable fits when parameter error exceeds 100 %
     │
-    └── EISAnalyser / AnalysisPlotter
-            ├── calculates derived quantities such as R_i conductivity
+    └── EISAnalyser / EISPlotter
+            ├── calculates derived quantities such as selected conductivities
             ├── creates per-sample R/Q or R/C parameter bar charts
-            └── creates experiment-level conductivity summary plots
+            ├── creates residual plots when enabled
+            └── creates one experiment-level summary plot per conductivity type
 ```
 
 The aim is to keep each class responsible for one task.
@@ -39,14 +50,15 @@ The aim is to keep each class responsible for one task.
 | Class | Role |
 |---|---|
 | `EISPipeline` | Coordinates the complete workflow. |
+| `ConfigLoader` | Loads `global.json`, experiment `metadata.json`, and reusable method files. |
+| `Experiment` | Stores merged experiment settings, paths, selected circuits, geometry, and run options. |
 | `EISPreprocessor` | Converts, cleans, splits, and prepares raw EIS data. |
-| `EISFitter` | Fits equivalent circuits and saves fitted parameters. |
-| `FitPlotter` | Creates Bode and Nyquist plots of experimental vs fitted data. |
-| `EISAnalyser` | Adds derived quantities, especially conductivity from `R_i`. |
+| `EISFitter` | Fits equivalent circuits, calculates fit metrics, and saves fitted parameters. |
+| `FitMetrics` | Calculates residuals, chi-square, and reduced chi-square. |
+| `FitPlotter` | Creates Bode, Nyquist, and residual plots of experimental vs fitted data. |
+| `EISAnalyser` | Adds derived quantities, especially conductivities requested in the circuit mapping. |
 | `AnalysisPlotter` | Creates parameter and conductivity bar charts. |
-| `FigureSaver` | Saves figures according to user preferences, e.g. PNG, SVG, transparent background. |
-
----
+| `FigureSaver` | Saves figures according to global saving preferences, e.g. PNG, SVG, transparent background. |
 
 ## 2. Installation
 
@@ -111,14 +123,28 @@ pip install -r requirements.txt
 
 ## 4. Data organisation
 
-The project is designed around a **data root** containing:
+The project is designed around:
 
-1. one `_methods/` folder containing reusable method files;
-2. experiment folders organised by user/project/experiment.
+1. a root-level `global.json` file in the project repository;
+2. one `_methods/` folder containing reusable method files;
+3. experiment folders organised by user/project/experiment.
 
 Current architecture:
 
 ```text
+eis_fitting/
+├── main.py
+├── global.json
+└── eis_fitting/
+    ├── pipeline.py
+    ├── circuits.py
+    ├── config/
+    ├── core/
+    ├── preprocessing/
+    ├── fitting/
+    ├── analysis/
+    └── plotting/
+
 data/
 ├── _methods/
 │   └── conductive_hydrogel.json
@@ -146,13 +172,11 @@ data/
 The experiment folder should contain only:
 
 - the experiment `metadata.json`;
-- raw experimental files, such as `.csv`or `.mpr`.
+- raw experimental files, such as `.csv` or `.mpr`.
 
 It should not contain manually created fitting, analysis, or plotting folders. These are created automatically by the pipeline.
 
-The `_methods/` folder stores reusable method-level settings, such as sample geometry and figure-saving preferences. This avoids repeating the same geometry and plotting settings in every experiment metadata file.
-
----
+The `_methods/` folder stores reusable method-level scientific settings, such as sample geometry and method-level frequency uncertainty. Figure-saving preferences are not stored in method files anymore; they are controlled globally from `global.json`.
 
 ## 5. Local mode and workspace mode
 
@@ -225,21 +249,142 @@ Workspace mode is recommended for larger projects because the original raw data 
 
 ---
 
-## 6. Metadata and method files
+## 6. Metadata, method files, and global configuration
 
-The current architecture uses three JSON files:
+The current architecture uses three JSON layers:
 
-1. a **global configuration file**
-2. an **experiment metadata file**;
-3. a reusable **method file** .
+1. a root-level **global configuration file**;
+2. an experiment-level **metadata file**;
+3. a reusable **method file**.
 
-The experiment metadata file defines what should be run for a specific experiment.
+The separation is:
 
-The method file defines shared experimental settings, such as geometry and figure-saving preferences.
+```text
+global.json      → paths, run options, plotting options, save preferences
+metadata.json    → experiment description, method name, selected circuits
+_methods/*.json  → reusable scientific method settings, especially geometry
+```
+
+This avoids repeating geometry and run options in every experiment folder.
 
 ---
 
-### 6.1 Experiment metadata file
+### 6.1 Global configuration file
+
+The root-level `global.json` file is placed next to `main.py`.
+
+Example:
+
+```json
+{
+    "paths": {
+        "data_path": "/home/enzos/data/",
+        "user": "enzo",
+        "project": "test",
+        "output_mode": "workspace",
+        "output_path": "/home/enzos/data_processed"
+    },
+    "run": {
+        "pre_plot": false,
+        "fit": true,
+        "plot": true,
+        "plot_residuals": true,
+        "display_chi_square": true
+    },
+    "save_preferences": {
+        "transparent": false,
+        "png": true,
+        "svg": false
+    },
+    "plotting_limits": {
+        "R_and_Q": {
+            "left_ylim": [
+                1e-1,
+                1e15
+            ],
+            "right_ylim": [
+                1e-12,
+                1e-2
+            ]
+        },
+        "conductivities": {
+            "left_ylim": null,
+            "right_ylim": null
+        }
+    },
+    "full_terminal": true
+}
+```
+
+---
+
+### 6.2 Global configuration fields
+
+#### `paths`
+
+| Field | Meaning |
+|---|---|
+| `paths.data_path` | Root folder containing the raw data and the `_methods/` folder. |
+| `paths.methods_path` | Folder containing reusable method files. If omitted, this can default to `<data_path>/_methods`. |
+| `paths.user` | User/person folder inside `data_path`. |
+| `paths.project` | Project folder inside `data_path/user`. |
+| `paths.output_mode` | Either `"local"` or `"workspace"`. |
+| `paths.output_path` | Root output folder used in workspace mode. Required if `output_mode` is `"workspace"`. |
+
+In workspace mode, raw data remain in:
+
+```text
+data/<user>/<project>/<experiment>/
+```
+
+and processed outputs are written to:
+
+```text
+<output_path>/processed/<user>/<project>/<experiment>/
+```
+
+#### `run`
+
+| Field | Meaning |
+|---|---|
+| `run.pre_plot` | If `true`, preprocess only and create preliminary plots. No fitting or analysis is performed afterwards. |
+| `run.fit` | If `true`, fitting is allowed when no fitted CSVs exist yet. |
+| `run.plot` | Master switch for plot generation. If `false`, the workflow can still fit and write CSV files without creating figures. |
+| `run.plot_residuals` | If `true`, residual plots are generated when fit plotting is enabled. |
+| `run.display_chi_square` | If `true`, fitted Bode/Nyquist plots display chi-square information. |
+
+#### `save_preferences`
+
+| Field | Meaning |
+|---|---|
+| `save_preferences.transparent` | If `true`, figures are saved with a transparent background. |
+| `save_preferences.png` | If `true`, figures are saved as PNG files. |
+| `save_preferences.svg` | If `true`, figures are saved as SVG files. |
+
+These options used to live in the method file, but they are now global because they describe how the workflow saves figures rather than the scientific method itself.
+
+#### `plotting_limits`
+
+Manual y-axis limits for analysis plots. Each entry corresponds to a figure type.
+
+Example:
+
+```json
+"R_and_Q": {
+    "left_ylim": [1e-1, 1e15],
+    "right_ylim": [1e-12, 1e-2]
+}
+```
+
+Use `null` to keep automatic Matplotlib scaling.
+
+#### `full_terminal`
+
+If `true`, the workflow prints more information about selected experiments, paths, skipped fits, failed fits, and generated outputs.
+
+---
+
+### 6.3 Experiment metadata file
 
 Each experiment must contain a `metadata.json` file.
 
@@ -249,12 +394,8 @@ Example:
 {
     "method": "conductive_hydrogel",
     "description": "0.1 % w/v PEDOT:PSS, no Upy",
-    "run": {
-        "pre_plot": false,
-        "plot": true
-    },
     "circuits": [
-        "circuit_2", "elec_1"
+        "ionic_1"
     ]
 }
 ```
@@ -277,21 +418,21 @@ loads:
 data/_methods/conductive_hydrogel.json
 ```
 
+Run options such as `pre_plot`, `plot`, `plot_residuals`, and `display_chi_square` are not stored in each experiment metadata file anymore. They are controlled globally from `global.json`.
+
 ---
 
-### 6.2 Experiment metadata fields
+### 6.4 Experiment metadata fields
 
 | Field | Meaning |
 |---|---|
 | `method` | Name of the method file to load from `data/_methods/`, without the `.json` extension. |
 | `description` | Free-text description of the experiment. |
-| `run.pre_plot` | If `true`, only preprocess and create preliminary plots. No fitting is performed. |
-| `run.plot` | If `true`, generate plots. If fit CSVs already exist, plots can be regenerated without refitting. |
 | `circuits` | List of circuit names to fit. These names must exist in the circuit dictionary. |
 
 ---
 
-### 6.3 Method file
+### 6.5 Method file
 
 Method files are stored in:
 
@@ -315,18 +456,12 @@ Example method file:
         "area_cm2": 1.0,
         "SD_area_cm2": 0.2
     },
-
-    "save_preferences": {
-        "transparent": false,
-        "png": true,
-        "svg": false
-    }
 }
 ```
 
 ---
 
-### 6.4 Method file fields
+### 6.6 Method file fields
 
 | Field | Meaning |
 |---|---|
@@ -334,64 +469,60 @@ Example method file:
 | `geometry.SD_thickness_cm` | Standard deviation or uncertainty of thickness. |
 | `geometry.area_cm2` | Electrode/sample area in cm². |
 | `geometry.SD_area_cm2` | Standard deviation or uncertainty of area. |
-| `save_preferences.transparent` | If `true`, figures are saved with a transparent background. |
-| `save_preferences.png` | If `true`, figures are saved as PNG files. |
-| `save_preferences.svg` | If `true`, figures are saved as SVG files. |
 
-This separation makes experiments cleaner. The experiment metadata only describes the specific run, while the method file stores shared settings that can be reused across many experiments.
+The method file should contain reusable scientific constants. It should not contain plotting preferences.
 
 ## 7. Running the workflow
 
 The workflow is launched from `main.py`.
+
+The current structure keeps `main.py` short. It loads `global.json`, creates the pipeline, and runs the project specified in the global configuration.
 
 A typical `main.py` structure is:
 
 ```python
 from pathlib import Path
 
-from eis_fitting.circuits import CIRCUITS
-from eis_fitting.pipeline import EISPipeline
+from eis_fitting import CIRCUITS, EISPipeline
+from eis_fitting.config import ConfigLoader
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DATA_ROOT = PROJECT_ROOT / "data"
 
-PERSON = "bel"
-PROJECT = "shoebox"
-
-OUTPUT_MODE = "workspace"
-OUTPUT_ROOT = PROJECT_ROOT / "data_processed"
+PROJECT_ROOT = Path(__file__).resolve().parent
+GLOBAL_CONFIG_PATH = PROJECT_ROOT / "global.json"
 
 
 def main():
-    # initialisation
+    global_config = ConfigLoader.load_global_config(GLOBAL_CONFIG_PATH)
+
     pipeline = EISPipeline(
-        data_root=DATA_ROOT,
+        global_config=global_config,
         circuits=CIRCUITS,
-        output_mode=OUTPUT_MODE,
-        output_root=OUTPUT_ROOT,
     )
 
-    pipeline.run_project(person=PERSON, project=PROJECT, full_terminal=True)
+    pipeline.run_project()
 
+
+if __name__ == "__main__":
+    main()
 ```
 
-Then run from ~/projects/eis_fitting :
+Then run from the repository root:
 
 ```bash
 python main.py
 ```
 
-or, if the project is installed as a package run from ~/projects :
+or, if the project is installed as a package:
 
 ```bash
 python -m eis_fitting.main
 ```
 
----
+The person, project, input path, output mode, and output path are read from `global.json`, so they do not need to be edited directly in `main.py`.
 
 ## 8. Pipeline behaviour
 
-The run behaviour is controlled by the metadata file and by whether processed results already exist.
+The run behaviour is controlled by `global.json` and by whether processed results already exist.
 
 ### 8.1 Preprocessing-only mode
 
@@ -415,14 +546,15 @@ pre-fit Bode/Nyquist plots
 
 No equivalent-circuit fitting is performed.
 
-This is useful for checking data quality before fitting.
+This mode is intended for manual inspection and cleaning. After checking the preliminary plots, the user can manually remove bad points from the cleaned CSV files before running the fitting workflow.
 
 ### 8.2 Fitting mode
 
 If:
 
 ```json
-"pre_plot": false
+"pre_plot": false,
+"fit": true
 ```
 
 and no fit results are available yet, the pipeline runs fitting and analysis.
@@ -434,22 +566,44 @@ processed CSVs
     ↓
 equivalent-circuit fitting
     ↓
-fitted Bode/Nyquist plots
+fit metrics and residuals
     ↓
 parameter CSVs
+    ↓
+fitted Bode/Nyquist/residual plots
     ↓
 analysis plots
 ```
 
 ### 8.3 Fitting without plotting
 
-If plotting is disabled in the current configuration, the fitter can be used to generate the csv file of fitted parameters without plotting.
+If plotting is disabled in `global.json`, the fitter can generate fitted-parameter CSV files without producing figures.
 
 ```json
 "plot": false
 ```
 
----
+This is useful for quick batch fitting or when only the numerical results are needed.
+
+### 8.4 Replotting without refitting
+
+If fit CSV files already exist, the pipeline does not need to refit the data. To regenerate plots without refitting, delete only the plot folder:
+
+```bash
+rm -rf <processed_experiment>/fits/plots
+```
+
+Then make sure plotting is enabled in `global.json`:
+
+```json
+"plot": true
+```
+
+and rerun the workflow.
+
+The fitted parameter CSV files are kept, while the plotter can recreate the Bode, Nyquist, residual, and analysis plots from the existing processed CSVs and fit results.
+
+Do not delete the circuit CSV files if the goal is only to change figure style, axis limits, residual display, or save format.
 
 ## 9. Output structure
 
@@ -470,8 +624,9 @@ processed/<person>/<project>/<experiment>/
         │   ├── circuit_1/
         │   │   ├── sample_1_circuit_1_bode_fit.png
         │   │   ├── sample_1_circuit_1_nyquist_fit.png
+        │   │   ├── sample_1_circuit_1_residuals.png
         │   │   └── sample_1_circuit_1_R_and_Q.png
-        |   |
+        │   |
         │   └── circuit_2/
         │
         ├── sample_2/
@@ -482,70 +637,98 @@ processed/<person>/<project>/<experiment>/
         ├── analysis/
         │   └── optional analysis-level plots
         │
-        └── <experiment>_<circuit_1>_Ri_conductivity_all_samples.png
+        ├── <experiment>_<circuit_1>_Ri_conductivity_all_samples.png
+        └── <experiment>_<circuit_1>_Rbulk_conductivity_all_samples.png
 ```
 
----
+If a fit is rejected because one or more parameter percentage errors exceed 100 %, the parameter CSV records the failure. In that case, no Bode, Nyquist, residual, or bar plots are generated for that failed fit. Depending on when the output folders are created, an empty plot folder may remain; this is expected and indicates that the fit was skipped after validation.
 
 ## 10. Equivalent circuits
 
 Equivalent circuits are defined in the circuit dictionary, usually in a file such as:
 
 ```text
-projects/eis_fitting/circuits.py
+projects/eis_fitting/eis_fitting/circuits.py
 ```
 
 Each circuit entry contains:
 
 - a circuit string
-- initial guesses
-- a mapping dictionary for readable parameter names, colours, and plotting order
+- one or several initial guesses
+- a mapping dictionary for readable parameter names, colours, plotting order, and conductivity calculation
 
 Example:
 
 ```python
 CIRCUITS = {
-    "circuit_1": {
-        "string": "p(R_1-CPE_1,R_2)",
+    "ionic_1": {
+        "string": "R_1-p(R_2,CPE_1)-CPE_2",
         "guess": [
-            100,
-            1e-6,
-            0.9,
-            1000,
+            80,
+            2000,
+            1e-4,
+            0.8,
+            2e-5,
+            0.95,
         ],
         "mapping": {
             "R_1": {
                 "name": "R_i",
                 "colour": "#80D4F8",
                 "order": 0,
+                "compute_conductivity": True,
             },
             "R_2": {
-                "name": "R_e",
+                "name": "R_bulk",
                 "colour": "#F37F8C",
                 "order": 1,
+                "compute_conductivity": True,
             },
             "CPE_1_0": {
-                "name": "Q_DL",
-                "colour": "#7C84C2",
+                "name": "Q_bulk",
+                "colour": "#F49A80",
                 "order": 0,
             },
             "CPE_1_1": {
+                "name": "alpha_bulk",
+                "colour": "#F49A80",
+                "order": 0,
+            },
+            "CPE_2_0": {
+                "name": "Q_DL",
+                "colour": "#7C84C2",
+                "order": 1,
+            },
+            "CPE_2_1": {
                 "name": "alpha_DL",
                 "colour": "#7C84C2",
-                "order": 0,
+                "order": 1,
             },
         },
     },
 }
 ```
- In this case, the equivalent circuit is as follows with an example of proper fitting.
+
+In this example, conductivities are computed only for `R_i` and `R_bulk`, because these are the only resistances with:
+
+```python
+"compute_conductivity": True
+```
+
+Resistances such as contact resistance, charge-transfer resistance, or interfacial resistances should usually have:
+
+```python
+"compute_conductivity": False
+```
+
+or omit the field entirely.
 
 <p align="center">
   <img src="./resources/DK_circuit_1_bar.png" height="300">
   <img src="./resources/DK_circuit_1_bode.png" height="300">
 </p>
 
-> Note that the names displayed in the parameter bars does not follow the `impedance.py` string naming convention but an intuitive mapping detailed in further sections.
+> Note that the names displayed in the parameter bars do not follow the `impedance.py` string naming convention directly. They use the readable names defined in the circuit mapping.
 
 ### Circuit syntax
 
@@ -557,7 +740,16 @@ The circuit syntax follows the `impedance.py` `CustomCircuit` convention.
 | `p(R_1,CPE_1)` | Parallel connection. |
 | `CPE_1` | Constant phase element with two parameters: `CPE_1_0` and `CPE_1_1`. |
 
----
+### Mapping fields
+
+| Field | Meaning |
+|---|---|
+| `name` | Readable parameter name written to the fitted parameter CSV. |
+| `colour` | Colour used in parameter bar plots. |
+| `order` | Plotting order for parameters of the same family. |
+| `compute_conductivity` | Optional boolean. If `true`, conductivity is calculated from this resistance. |
+
+The `compute_conductivity` field is only meaningful for resistance elements.
 
 ## 11. Fitting
 
@@ -570,13 +762,23 @@ For each selected circuit and each sample, the fitter:
 5. predicts the fitted impedance
 6. extracts fitted parameters
 7. calculates standard deviations and percentage errors where possible
-8. calculates chi-square and reduced chi-square
-9. saves the result to a circuit-specific CSV
-10. generates fitted Bode and Nyquist plots if plotting is enabled
+8. calculates residuals, chi-square, and reduced chi-square through `fit_metrics.py`
+9. rejects the fit if any fitted parameter has a percentage error above 100 %
+10. saves the result to a circuit-specific CSV
+11. generates fitted Bode, Nyquist, and residual plots if plotting is enabled and the fit passed validation
 
----
+The 100 % parameter-error threshold is used to reject visually good but non-identifiable fits. A fit can have a good chi-square and scattered residuals while still having poorly determined parameters. In that situation, the equivalent circuit may reproduce the spectrum, but the individual elements should not be interpreted physically.
 
-## 12. Fit-quality metrics
+Rejected fits are stored in the CSV with:
+
+```text
+fit_success = False
+error = Fit rejected: parameter uncertainty above 100 % for ...
+```
+
+and are not plotted.
+
+## 12. Fit-quality metrics and residuals
 
 The fitter saves:
 
@@ -587,15 +789,37 @@ reduced_chi_square
 
 The chi-square value quantifies the difference between experimental and fitted impedance values.
 
-For complex EIS data, the residual contains both real (*Z'*) and imaginary (*Z''*) parts:
+For complex EIS data, the residual contains both real (`Z'`) and imaginary (`Z''`) parts:
 
 ```text
 Z = Z' + jZ''
 ```
 
+The `fit_metrics.py` module centralises the fit-quality calculations. It is responsible for calculating:
+
+- complex residuals;
+- real residuals;
+- imaginary residuals;
+- chi-square;
+- reduced chi-square.
+
 The reduced chi-square is normalised by the degrees of freedom and is more useful when comparing circuits with different numbers of parameters.
 
-However, chi-square and reduced chi-square are not used as the only criteria for model selection. Equivalent circuits must also be judged by:
+Residual plots are generated when:
+
+```json
+"plot_residuals": true
+```
+
+in `global.json`.
+
+A good residual plot should show points scattered around zero without systematic structure. Curved, frequency-dependent, or sign-biased residuals usually indicate that the circuit is missing a physical contribution or that the selected frequency range is problematic.
+
+<p align="center">
+  <img src="./resources/residuals_example.png" height="300">
+</p>
+
+However, chi-square and residuals are not used as the only criteria for model selection. Equivalent circuits must also be judged by:
 
 - visual agreement in Nyquist and Bode plots
 - absence of systematic residuals
@@ -604,9 +828,15 @@ However, chi-square and reduced chi-square are not used as the only criteria for
 - physical meaning of the circuit elements
 - avoidance of unnecessary overfitting.
 
-The fitted Bode and Nyquist plots can display both `chi_square` and `reduced_chi_square` directly on the figure.
+The fitted Bode and Nyquist plots can display both `chi_square` and `reduced_chi_square` directly on the figure when:
 
----
+```json
+"display_chi_square": true
+```
+
+is set in `global.json`.
+
+A fit with low chi-square but very large parameter standard deviations is considered non-identifiable. The workflow therefore rejects fits when any parameter percentage error exceeds 100 %.
 
 ## 13. Parameter CSV files
 
@@ -625,29 +855,40 @@ sample
 circuit_name
 circuit_string
 fit_success
-fit_status
-covariance_warning
+error
 chi_square
 reduced_chi_square
 R_i
 SD_R_i
 R_i_percent_error
+R_bulk
+SD_R_bulk
+R_bulk_percent_error
+Q_bulk
+SD_Q_bulk
+Q_bulk_percent_error
+alpha_bulk
+SD_alpha_bulk
+alpha_bulk_percent_error
 Q_DL
 SD_Q_DL
 Q_DL_percent_error
 alpha_DL
 SD_alpha_DL
 alpha_DL_percent_error
-R_e
-SD_R_E
-R_e_percent_error
+conductivity_S_cm_R_i
+SD_conductivity_S_cm_R_i
+conductivity_S_cm_R_bulk
+SD_conductivity_S_cm_R_bulk
 ```
 
 <p align="center">
   <img src="./resources/circuit.png" height="300">
 </p>
 
-Different circuits may have different columns, depending on the circuit elements.
+Different circuits may have different columns, depending on the circuit elements and on which resistances have `compute_conductivity=True`.
+
+If a fit is rejected, the CSV row still records the sample, circuit, `fit_success=False`, the error message, and `NaN` fit metrics. This makes failed fits visible without silently dropping samples.
 
 > Small fitted values, especially CPE magnitudes, should be saved in scientific notation. The code should avoid rounding fitted parameters directly in `_fit_one`, because values such as `1e-9` can otherwise be rounded to `0.0`.
 
@@ -661,27 +902,39 @@ df.to_csv(
 )
 ```
 
----
-
 ## 14. Conductivity calculation
 
-The analyser calculates conductivity from the fitted resistance mapped as:
+The analyser calculates conductivities from fitted resistances only when requested in the circuit mapping.
+
+For a resistance entry in `circuits.py`:
+
+```python
+"R_1": {
+    "name": "R_i",
+    "colour": "#80D4F8",
+    "order": 0,
+    "compute_conductivity": True,
+}
+```
+
+the analyser writes:
 
 ```text
-R_i
+conductivity_S_cm_R_i
+SD_conductivity_S_cm_R_i
 ```
 
 The conductivity is calculated as:
 
 ```text
-sigma = thickness / (R_i * area)
+sigma = thickness / (R * area)
 ```
 
 with:
 
 ```text
 sigma  = conductivity in S.cm^-1
-R_i    = ionic or bulk resistance in ohm
+R      = selected fitted resistance in ohm
 area   = electrode/sample area in cm^2
 length = sample thickness in cm
 ```
@@ -692,27 +945,50 @@ The uncertainty is propagated from:
 - area uncertainty
 - resistance uncertainty
 
-The analyser writes:
+The relative uncertainty is:
 
 ```text
-conductivity_S_cm_R_i
-SD_conductivity_S_cm_R_i
+SD_sigma / sigma =
+sqrt[
+    (SD_thickness / thickness)^2
+  + (SD_R / R)^2
+  + (SD_area / area)^2
+]
 ```
 
-Only the resistance mapped as `R_i` is used for the main conductivity calculation, because this parameter is intended to represent the bulk or through-sample resistance of the hydrogel. Other fitted resistances, such as charge-transfer, transport, interfacial, or polarization resistances, should not automatically be converted into bulk conductivity.
+Only resistances explicitly marked with:
 
-These additional resistances are part of equivalent-circuit branches that represent distributed and coupled electrochemical phenomena rather than a simple homogeneous conduction path through the sample. Therefore, applying
+```python
+"compute_conductivity": True
+```
 
-$$
-\sigma = \frac{L}{R A}
-$$
+are converted into conductivity columns. This is important because not all fitted resistances represent a through-sample transport path.
 
-to these resistances does not give a physically rigorous conductivity value.
+<p align="center">
+  <img src="./resources/compute_conductivity_mapping.png" height="300">
+</p>
 
-However, such derived values can still be useful as qualitative indicators. While they should not be interpreted as absolute conductivities, they may help reveal overall trends between samples, such as increasing or decreasing resistance contributions associated with a specific fitted process.
+For example:
 
+| Resistance type | Usually compute conductivity? | Reason |
+|---|---:|---|
+| `R_i` | Yes | Intended to represent ionic through-sample resistance. |
+| `R_bulk` | Yes, if physically assigned to bulk transport. | Bulk pathway across the sample geometry. |
+| `R_e` | Maybe | Only if interpreted as a through-sample electronic pathway. |
+| `R_c` | No | Contact resistance is not a bulk material resistance. |
+| `R_ct` | No | Charge-transfer resistance is an interfacial kinetic parameter. |
+| `R_s` | Usually no | Often includes solution, lead, or series contributions. |
 
----
+The conductivity plots are generated directly from the conductivity columns present in the parameter CSV. Therefore, the analysis step decides which conductivities exist, and the plotting step simply plots them.
+
+For each conductivity type, one separate experiment-level plot is created. For example:
+
+```text
+fits/plots/<experiment>_<circuit>_Ri_conductivity_all_samples.png
+fits/plots/<experiment>_<circuit>_Rbulk_conductivity_all_samples.png
+```
+
+This avoids mixing physically different conductivity estimates in the same figure.
 
 ## 15. Plotting
 
@@ -742,7 +1018,7 @@ These show:
 
 - experimental impedance magnitude and phase
 - fitted circuit response
-- chi-square and reduced chi-square, if available.
+- chi-square and reduced chi-square, if enabled in `global.json`.
 
 ### 15.3 Fitted Nyquist plots
 
@@ -756,11 +1032,31 @@ These show:
 
 - experimental complex impedance
 - fitted complex impedance
-- chi-square and reduced chi-square, if available.
+- chi-square and reduced chi-square, if enabled in `global.json`.
 
-### 15.4 Parameter bar charts
+### 15.4 Residual plots
 
-For each sample and circuit:
+For each successful sample/circuit fit:
+
+```text
+fits/plots/<sample>/<circuit>/<sample>_<circuit>_residuals.png
+```
+
+These show the residuals between experimental and fitted impedance data.
+
+Residuals are controlled by:
+
+```json
+"plot_residuals": true
+```
+
+in `global.json`.
+
+Residual plots are useful because a fit can look good in Bode or Nyquist space while still showing systematic deviations in the residuals.
+
+### 15.5 Parameter bar charts
+
+For each successful sample and circuit:
 
 ```text
 fits/plots/<sample>/<circuit>/<sample>_<circuit>_R_and_Q.png
@@ -772,23 +1068,28 @@ The left y-axis is used for resistance values, and the right y-axis is used for 
 
 If the circuit contains CPEs, the alpha values can be written above the relevant bars.
 
-### 15.5 Conductivity summary plots
+Fits rejected because of parameter percentage errors above 100 % are not plotted. This can leave an empty sample/circuit folder if the folder was created before the fit was rejected.
 
-For each circuit, the workflow creates one experiment-level conductivity plot:
+### 15.6 Conductivity summary plots
+
+For each conductivity column present in the parameter CSV, the workflow creates one experiment-level conductivity plot.
+
+Example:
 
 ```text
 fits/plots/<experiment>_<circuit>_Ri_conductivity_all_samples.png
+fits/plots/<experiment>_<circuit>_Rbulk_conductivity_all_samples.png
 ```
 
-This plot contains:
+Each plot contains:
 
 - one bar per sample
-- conductivity calculated from `R_i`
+- one conductivity type only
 - optional error bars
-- automatic y-axis scaling
-- a colour gradient across samples.
+- automatic or user-defined y-axis scaling
+- a colour gradient across samples for style.
 
-The conductivity plot is saved directly in:
+The conductivity plots are saved directly in:
 
 ```text
 fits/plots/
@@ -796,11 +1097,32 @@ fits/plots/
 
 not inside the per-sample folders.
 
----
+### 15.7 Replotting
+
+If only the plots need to be regenerated, delete:
+
+```text
+fits/plots/
+```
+
+and rerun the workflow with:
+
+```json
+"plot": true
+```
+
+The fit CSVs are preserved, so the workflow can replot without refitting. This is useful after changing:
+
+- plot limits;
+- save preferences;
+- residual display;
+- chi-square display;
+- figure formats;
+- labels or colours.
 
 ## 16. Plot customisation
 
-Several plotting options can be modified from `main.py`, from metadata, or from a plotting-configuration dictionary depending on the current project setup.
+Most plotting options are controlled from the root-level `global.json`.
 
 ### 16.1 Figure saving
 
@@ -828,50 +1150,46 @@ Manual y-axis limits can be supplied for bar charts.
 
 Example:
 
-```python
-PLOTTING_LIMITS = {
+```json
+"plotting_limits": {
     "R_and_Q": {
-        "left_ylim": (1e0, 1e6),
-        "right_ylim": (1e-10, 1e-2),
+        "left_ylim": [1e0, 1e6],
+        "right_ylim": [1e-10, 1e-2]
     },
     "conductivities": {
-        "left_ylim": None,
-    },
+        "left_ylim": null,
+        "right_ylim": null
+    }
 }
 ```
 
-Then pass this to the pipeline or plotter:
+If limits are set to `null`, Matplotlib automatic scaling is used.
 
-```python
-pipeline = EISPipeline(
-    circuits=CIRCUITS,
-    plotting_limits=PLOTTING_LIMITS,
-)
+For conductivity plots, automatic scaling is often recommended because conductivities can vary significantly between experiments.
+
+### 16.3 Residual plotting
+
+Residual plotting is controlled by:
+
+```json
+"plot_residuals": true
 ```
 
-If limits are set to `None`, Matplotlib automatic scaling is used.
+If disabled, the workflow still fits the data and can still generate Bode, Nyquist, and parameter plots.
 
-For conductivity plots, automatic scaling is recommended because conductivities can vary significantly between experiments.
+### 16.4 Chi-square display
 
-### 16.3 Conductivity bar width
+Chi-square display on fit plots is controlled by:
 
-The conductivity summary plot supports thinner or wider bars.
-
-Example:
-
-```python
-bar_width = 0.35
+```json
+"display_chi_square": true
 ```
 
-A good publication-style range is:
+If disabled, chi-square and reduced chi-square are still calculated and stored in the CSV, but they are not written directly on the figures.
 
-```text
-0.25 to 0.45
-```
+### 16.5 Conductivity colour gradient
 
-### 16.4 Conductivity colour gradient
-
-The conductivity summary plot can use a Matplotlib colormap.
+The conductivity summary plots can use a Matplotlib colormap.
 
 Examples:
 
@@ -883,16 +1201,16 @@ cmap_name = "magma"
 cmap_name = "cividis"
 ```
 
-For hydrogel conductivity plots, `viridis`, `Blues`, or `cividis` are recommended because they are clean and readable even for colourblind people.
+For hydrogel conductivity plots, `viridis`, `Blues`, or `cividis` are recommended because they are clean and readable.
 
-### 16.5 Terminal output
+Since each conductivity type is plotted as a separate figure, no legend is required for conductivity summary plots. The colour gradient is only used to visually separate samples.
 
-The project can be run with a fuller terminal output mode if enabled in `main.py` or in the pipeline configuration.
+### 16.6 Terminal output
 
-Example:
+Terminal output is controlled by:
 
-```python
-full_terminal = True
+```json
+"full_terminal": true
 ```
 
 This is useful for debugging because it allows the workflow to print:
@@ -902,45 +1220,72 @@ This is useful for debugging because it allows the workflow to print:
 - preprocessing status
 - fitting status
 - failed fits
-- covariance warnings
+- high parameter-error rejection
 - skipped files
 - saved output paths.
 
-For large batch runs, a quieter mode can be used to reduce terminal output by calling `pipeline.run_project(person=PERSON, project=PROJECT, full_terminal=False)` in `main.py`
+For large batch runs, a quieter mode can be used:
 
-### 16.6 Progress bars
+```json
+"full_terminal": false
+```
 
-The fitting workflow can use `tqdm` progress bars to show fitting progress across samples and circuits.
+### 16.7 Progress bars
 
-This is useful for long experiments with many samples or several circuits
+The fitting workflow can use `tqdm` progress bars to show progress across samples and circuits.
 
----
+This is useful for long experiments with many samples or several circuits.
 
 ## 17. Fit warnings and failure handling
 
-The fitter should track whether the fit was successful.
+The fitter tracks whether the fit was successful.
 
 Useful output columns include:
 
 ```text
 fit_success
-fit_status
-covariance_warning
 error
+chi_square
+reduced_chi_square
+<parameter>
+SD_<parameter>
+<parameter>_percent_error
 ```
 
 A fit may be marked as failed if:
 
 - the optimizer fails
 - fitted parameters are not finite
-- covariance cannot be estimated
+- covariance or standard errors are unavailable
+- one or more fitted parameter percentage errors exceed 100 %
 - the fitted result contains unphysical values
 - the circuit prediction fails
 - the fit raises an exception
 
-When covariance cannot be estimated, the result should be handled carefully because the fitted values may look reasonable while the uncertainty is not reliable.
+The 100 % parameter-error rule is designed to catch non-identifiable fits. These are cases where the circuit reproduces the impedance spectrum, but one or more individual parameters are poorly determined.
 
----
+For example:
+
+```text
+R_bulk_percent_error = 250 %
+```
+
+causes the fit to be rejected.
+
+The CSV row then contains:
+
+```text
+fit_success = False
+error = Fit rejected: parameter uncertainty above 100 % for R_bulk: 250.0 %
+```
+
+Rejected fits are not plotted. If a plot folder has already been created before the rejection is detected, the folder may remain empty. This is not a plotting bug; it indicates that the fit did not pass validation.
+
+<p align="center">
+  <img src="./resources/fit_rejection_percent_error.png" height="300">
+</p>
+
+When covariance cannot be estimated, the result should be handled carefully because the fitted values may look reasonable while the uncertainty is not reliable.
 
 ## 18. Recommended workflow
 
@@ -961,14 +1306,37 @@ sample_2.csv
 sample_3.mpr
 ```
 
-### Step 2: Run preprocessing only
+### Step 2: Select a method
 
 In `metadata.json`:
 
 ```json
+{
+    "method": "conductive_hydrogel",
+    "description": "short experiment description",
+    "circuits": [
+        "ionic_1"
+    ]
+}
+```
+
+Make sure the corresponding method file exists:
+
+```text
+data/_methods/conductive_hydrogel.json
+```
+
+### Step 3: Run preprocessing only
+
+In `global.json`:
+
+```json
 "run": {
     "pre_plot": true,
-    "plot": true
+    "fit": true,
+    "plot": true,
+    "plot_residuals": true,
+    "display_chi_square": true
 }
 ```
 
@@ -980,28 +1348,12 @@ python main.py
 
 Inspect the preliminary Bode and Nyquist plots.
 
-### Step 3: Select circuits
-
-Edit the `circuits` field in `metadata.json`:
-
-```json
-"circuits": [
-    "ionic_2",
-    "hydrogel_complex"
-]
-```
-
-Make sure these names exist in the circuit dictionary.
-
 ### Step 4: Run fitting
 
-Set:
+After manual cleaning, set in `global.json`:
 
 ```json
-"run": {
-    "pre_plot": false,
-    "plot": true
-}
+"pre_plot": false
 ```
 
 Run:
@@ -1018,25 +1370,43 @@ Inspect:
 
 - fitted Nyquist plots
 - fitted Bode plots
+- residual plots
 - chi-square and reduced chi-square
 - parameter uncertainties
 - whether fitted parameters are physically meaningful
+- whether any fits were rejected because parameter error exceeded 100 %
 
 ### Step 6: Inspect conductivity
 
-Check:
-
-```text
-fits/plots/<experiment>_<circuit>_Ri_conductivity_all_samples.png
-```
-
-and the fitted parameter CSV:
+Check the fitted parameter CSV:
 
 ```text
 fits/<experiment>_<circuit>.csv
 ```
 
----
+and the conductivity summary plots:
+
+```text
+fits/plots/<experiment>_<circuit>_<resistance>_conductivity_all_samples.png
+```
+
+Only resistances with `compute_conductivity=True` in `circuits.py` generate conductivity columns and conductivity plots.
+
+### Step 7: Replot without refitting
+
+To regenerate figures after changing style or plotting limits, delete only:
+
+```text
+fits/plots/
+```
+
+Then rerun:
+
+```bash
+python main.py
+```
+
+The workflow will preserve the existing fit CSVs and regenerate the plots.
 
 ## 19. Common issues
 
@@ -1105,33 +1475,78 @@ before passing them to Matplotlib.
 
 If covariance cannot be estimated, fitted standard deviations and percentage errors are unreliable.
 
-Such fits should be flagged with:
+Such fits should be flagged and treated cautiously.
+
+### Fit rejected because parameter error exceeds 100 %
+
+A visually good fit can still be rejected if one or more fitted parameters have a standard error larger than the fitted value.
+
+This means the equivalent circuit can reproduce the spectrum, but the individual parameter is not reliably identifiable.
+
+Check the `error` column in the fit CSV for a message such as:
 
 ```text
-covariance_warning = True
+Fit rejected: parameter uncertainty above 100 % for R_bulk: 250.0 %
 ```
 
-and treated cautiously.
+Rejected fits are not plotted.
 
----
+### Empty plot folder
+
+An empty plot folder usually means that the folder was created before the fit was rejected or skipped.
+
+Check the corresponding fit CSV. If `fit_success` is `False`, no Bode, Nyquist, residual, or parameter bar plot is expected.
+
+### Conductivity plot missing
+
+A conductivity plot is only generated if the corresponding conductivity column exists in the parameter CSV.
+
+Conductivity columns are created only for resistances with:
+
+```python
+"compute_conductivity": True
+```
+
+in the circuit mapping.
+
+### Replotting does not update figures
+
+Delete the plot folder:
+
+```bash
+rm -rf <processed_experiment>/fits/plots
+```
+
+then rerun with:
+
+```json
+"plot": true
+```
+
+Do not delete the fit CSV files unless you want to refit the data.
 
 ## 21. Current development status
 
 The current object-oriented version supports:
 
 - local and workspace data modes
+- root-level `global.json` configuration
 - metadata-driven experiment configuration
+- reusable method files in `data/_methods/`
 - preprocessing and pre-plotting
 - multi-circuit fitting
 - one fitted-parameter CSV per circuit
 - circuit-specific parameter columns
-- chi-square and reduced chi-square calculation
+- residual, chi-square, and reduced chi-square calculation through `fit_metrics.py`
 - fitted Bode and Nyquist plotting
+- optional residual plotting
 - per-sample R/Q or R/C parameter plots
-- R_i-based conductivity calculation
-- experiment-level conductivity summary plots
-- configurable plot limits
-- configurable figure saving
+- mapping-controlled conductivity calculation through `compute_conductivity`
+- one experiment-level conductivity summary plot per conductivity type
+- configurable plot limits through `global.json`
+- configurable figure saving through `global.json`
+- replotting without refitting by deleting only `fits/plots/`
+- rejection of non-identifiable fits when parameter percentage error exceeds 100 %
 - progress bars and terminal output options
 
 This version is intended as a robust research workflow before packaging the project as a reusable Python library.

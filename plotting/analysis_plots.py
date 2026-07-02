@@ -54,6 +54,8 @@ class AnalysisPlotter:
             right_columns = q_columns
             right_axis_label = r"Pseudo capacitance " r"($F\times s^{\alpha-1}$)"
 
+            df_params = pd.read_csv(parameters_csv)
+
             if not right_columns:
                 right_columns = capacitance_columns
                 right_axis_label = r"Capacitance ($F$)"
@@ -65,6 +67,15 @@ class AnalysisPlotter:
             for csv_path in sorted(experiment.paths.csv.glob("*.csv")):
                 sample = csv_path.stem
 
+                # checking if fit was successful for this sample and circuit before plotting
+                row = df_params[
+                    (df_params["sample"] == sample)
+                    & (df_params["circuit_name"] == circuit_name)
+                ]
+
+                if row.empty or not row.iloc[0]["fit_success"]:
+                    continue
+                
                 self.plot_parameter_bars(
                     parameters_csv=parameters_csv,
                     circuit_name=circuit_name,
@@ -374,10 +385,6 @@ class AnalysisPlotter:
             display_mapping=display_mapping,
             show_alpha=show_alpha,
         )
-
-        if not left_data and not right_data:
-            print(f"\nNo valid parameters found for {sample} | {circuit_name}")
-            return
 
         fig, ax_left = plt.subplots(figsize=(8, 5))
         ax_right = ax_left.twinx() if right_data else None

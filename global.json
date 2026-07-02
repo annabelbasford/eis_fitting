@@ -1,14 +1,13 @@
 {
     "paths": {
         "data_path": "/home/enzos/data/",
-        "user": "enzo",
-        "project": "test",
+        "user": "femke",
+        "project": "new",
         "output_mode": "workspace",
         "output_path": "/home/enzos/data_processed"
     },
     "run": {
         "pre_plot": false,
-        "multi_initial_guesses": true,
         "fit": true,
         "plot": true,
         "plot_residuals": true,

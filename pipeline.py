@@ -5,7 +5,7 @@ from .core import Experiment
 from .preprocessing import EISPreprocessor
 from .fitting import EISFitter
 from .analysis import EISAnalyser
-from .plotting import EISPlotter
+from .plotting import EISPlotter, PreprocessPlotter
 
 from tqdm import tqdm
 
@@ -25,7 +25,7 @@ class EISPipeline:
         self.person = paths_config["user"]
         self.project = paths_config["project"]
 
-        self.output_mode = paths_config.get("output_mode", "local")
+        self.output_mode = paths_config.get("output_mode", "workspace")
 
         output_path = paths_config.get("output_path")
         self.output_root = Path(output_path) if output_path is not None else None
@@ -56,27 +56,27 @@ class EISPipeline:
             print("\nInput folder: " + "\x1B[3m" + str(experiment.paths.input) + "\x1B[0m")
             print(f"Processed output: " + "\x1B[3m" + str(experiment.paths.processed_root) + "\x1B[0m")
 
-        
-        # --------------- Pre-plot / manual-cleaning mode --------------- #
-        
-        # If pre_plot is true, we preprocess and generate raw Bode plots,
-        # then stop before fitting.
-        if run_parameters.get("pre_plot", False):
-            EISPreprocessor().run(experiment)
-
-            if self.full_terminal:
-                print("Pre-plot mode enabled")
-                print("Stopping before fitting so clean CSVs can be edited by hand")
-
-            return
-
-        
-        # --------------- Normal preprocessing --------------- #
+        # --------------- Preprocessing --------------- #
         
         # If the experiment has never been processed, preprocess it.
         if not experiment.paths.processed_root.is_dir():
+            print("\nPreprocessing the raw data")
             EISPreprocessor().run(experiment)
+        
+        # --------------- Pre-plot / manual-cleaning mode --------------- #
+        
+        if run_parameters.get("pre_plot", False):
+            PreprocessPlotter().plot_folder(
+                input_folder=experiment.paths.csv,
+                output_folder=experiment.paths.pre_plots,
+            )
 
+            if self.full_terminal:
+                print("\nPre-plot mode enabled")
+                print("Stopping before fitting so clean CSVs can be edited by hand\n")
+
+            # to stop execution before fitting and allow for manual preprocessing
+            return
         
         # --------------- Fitting --------------- #
         

@@ -1,8 +1,10 @@
+import numpy as np
 import pandas as pd
 
 from .fit_plots import FitPlotter
 from .analysis_plots import AnalysisPlotter
 from ..utils import FigureSaver
+
 
 class EISPlotter:
     def __init__(self, circuits: dict, plotting_limits: dict | None = None):
@@ -63,7 +65,9 @@ class EISPlotter:
             )
 
     # Plot Nyquist/Bode overlays from in-memory fit results.
-    def plot_fit_results(self, experiment, all_fit_data, display_chi_square, plot_residuals) -> None:
+    def plot_fit_results(
+        self, experiment, all_fit_data, display_chi_square, plot_residuals
+    ) -> None:
 
         if not all_fit_data:
             print("No fit data available for plotting.")
@@ -103,10 +107,11 @@ class EISPlotter:
                     chi_square = row.iloc[0]["chi_square"]
                     reduced_chi_square = row.iloc[0]["reduced_chi_square"]
 
+                
                 circuit_plot_folder.mkdir(
-                    parents=True,
-                    exist_ok=True,
-                )
+                        parents=True,
+                        exist_ok=True,
+                    )
 
                 fit_plotter.plot_nyquist(
                     freq=data["freq"],
@@ -140,11 +145,12 @@ class EISPlotter:
                         sample=sample_name,
                         circuit_name=circuit_name,
                         save_folder=(
-                            circuit_plot_folder / f"{sample_name}_{circuit_name}_residuals"
+                            circuit_plot_folder
+                            / f"{sample_name}_{circuit_name}_residuals"
                         ),
                         chi_square=chi_square,
-                    reduced_chi_square=reduced_chi_square,
-                )
+                        reduced_chi_square=reduced_chi_square,
+                    )
 
         self.plot_all_runs(
             experiment=experiment,
