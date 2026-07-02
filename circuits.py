@@ -3,10 +3,10 @@ CIRCUITS = {
     "circuit_1": {
         "string": "p(R_1-CPE_1,R_2)",
         "guess": [
-            1000,  # R_i
-            1e-6,  # Q_DL
-            0.9,  # alpha_DL
-            1e7,  # R_e
+            1000,  # R_1 = R_i
+            1e-6,  # CPE_1_0 =Q_DL
+            0.9,  # CPE_1_1 = alpha_DL
+            1e7,  # R_2 = R_e
         ],
         "mapping": {
             "R_1": {
@@ -35,13 +35,13 @@ CIRCUITS = {
     "circuit_2": {
         "string": "R_1-p(R_3-CPE_1,CPE_2,R_2)",
         "guess": [
-            20,
-            750,
-            1e-5,
-            0.9,
-            1e-4,
-            0.7,
-            200,
+            20,  # R_1 = R_c
+            750,  # R_3 = R_i
+            1e-5,  # CPE_1_0 = Q_DL
+            0.9,  # CPE_1_1 = alpha_DL
+            1e-4,  # CPE_2_0 = Q_g
+            0.7,  # CPE_2_1 = alpha_g
+            200,  # R_2 = R_e
         ],
         "mapping": {
             "R_1": {
@@ -86,14 +86,14 @@ CIRCUITS = {
     "circuit_3": {
         "string": "p(R_1,CPE_1)-p(R_2,CPE_2)-CPE_3",
         "guess": [
-            100,  # R_grain
-            1e-6,  # Q_grain
-            0.9,  # alpha_grain
-            1000,  # R_2 / R_gb
-            1e-6,  # CPE_2_0 / Q_gb
-            0.8,  # CPE_2_1 / alpha_gb
-            1e-5,  # CPE_3_0 / Q_dl
-            0.9,  # CPE_3_1 / alpha_dl
+            100,  # R_1 = R_grain
+            1e-6,  # CPE_1_0 = Q_grain
+            0.9,  # CPE_1_1 = alpha_grain
+            1000,  # R_2 = R_gb
+            1e-6,  # CPE_2_0 = Q_gb
+            0.8,  # CPE_2_1 = alpha_gb
+            1e-5,  # CPE_3_0 = Q_dl
+            0.9,  # CPE_3_1 = alpha_dl
         ],
         "mapping": {
             "R_1": {
@@ -188,12 +188,12 @@ CIRCUITS = {
     "ionic_1": {
         "string": "R_1-p(R_2,CPE_1)-CPE_2",
         "guess": [
-            1e3,  # R_1, small series/contact resistance
-            1e5,  # R_2, mid-frequency bulk resistance
-            5e-11,  # Q_bulk / high-frequency CPE
-            0.95,  # alpha_bulk, high-frequency phase close to -90°
-            1e-7,  # Q_DL / low-frequency electrode polarization
-            0.70,  # alpha_DL, low-frequency phase around -60° to -70°
+            1e3,  # R_1 = R_i
+            1e5,  # R_2 = R_bulk
+            5e-11,  # CPE_1_0 = Q_bulk
+            0.95,  # CPE_1_1 = alpha_bulk
+            1e-7,  # CPE_2_0 = Q_DL
+            0.70,  # CPE_2_1 = alpha_DL
         ],
         "mapping": {
             "R_1": {
@@ -208,24 +208,36 @@ CIRCUITS = {
                 "order": 1,
                 "compute_conductivity": True,
             },
-            "CPE_1_0": {"name": "Q_bulk", "colour": "#F49A80", "order": 1},
-            "CPE_1_1": {"name": "alpha_bulk", "colour": "#F49A80", "order": 1},
-            "CPE_2_0": {"name": "Q_DL", "colour": "#7C84C2", "order": 2},
-            "CPE_2_1": {"name": "alpha_DL", "colour": "#7C84C2", "order": 2},
+            "CPE_1_0": {
+                "name": "Q_bulk",
+                "colour": "#F49A80",
+                "order": 1},
+            "CPE_1_1": {
+                "name": "alpha_bulk",
+                "colour": "#F49A80",
+                "order": 1},
+            "CPE_2_0": {
+                "name": "Q_DL",
+                "colour": "#7C84C2",
+                "order": 2},
+            "CPE_2_1": {
+                "name": "alpha_DL",
+                "colour": "#7C84C2",
+                "order": 2},
         },
     },
     "pseudo_randles_DL": {
         "string": "R_1-p(CPE_1,R_2-CPE_2)-p(CPE_3,R_3)",
         "guess": [
-            20,  # R_1
-            1e-5,  # CPE_1_0
-            0.9,  # CPE_1_1
-            1000,  # R_2
-            1e-4,  # CPE_2_0
-            0.6,  # CPE_2_1
-            1e-5,  # CPE_3_0
-            0.9,  # CPE_3_1
-            1000,  # R_3
+            20,  # R_1 = R_c
+            1e-5,  # CPE_1_0 = Q_g
+            0.9,  # CPE_1_1 = alpha_g
+            1000,  # R_2 = R_i
+            1e-4,  # CPE_2_0 = Q_DL
+            0.6,  # CPE_2_1 = alpha_DL
+            1e-5,  # CPE_3_0 = Q_pol
+            0.9,  # CPE_3_1 = alpha_pol
+            1000,  # R_3 = R_pol
         ],
         "mapping": {
             "R_1": {
@@ -344,14 +356,14 @@ CIRCUITS = {
     "circuit_3_shunt_hf": {
         "string": "p(R_1-p(R_2,CPE_1)-CPE_2,CPE_3)",
         "guess": [
-            1e3,  # R_i
-            1e5,  # R_bulk
-            1e-8,  # Q_bulk
-            0.60,  # alpha_bulk
-            1e-7,  # Q_DL
-            0.70,  # alpha_DL
-            5e-11,  # Q_HF / geometric or stray capacitance
-            0.95,  # alpha_HF
+            1e3,  # R_1 = R_i
+            1e5,  # R_2 =R_bulk
+            1e-8,  # CPE_1_0 = Q_bulk
+            0.60,  # CPE_1_1 =alpha_bulk
+            1e-7,  # CPE_2_0 = Q_DL
+            0.70,  # CPE_2_1 = alpha_DL
+            5e-11,  # CPE_3_0 = Q_HF / geometric or stray capacitance
+            0.95,  # CPE_3_1 = alpha_HF
         ],
         "mapping": {
             "R_1": {

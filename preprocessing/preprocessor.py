@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import glob
-import matplotlib.pyplot as plt
 import pandas as pd
 import shutil
 

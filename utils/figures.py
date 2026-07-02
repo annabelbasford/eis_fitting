@@ -6,7 +6,7 @@ class FigureSaver:
     def __init__(self, save_preferences: dict):
         self.save_preferences = save_preferences
 
-    def save(self, save_path, fig, axes):
+    def save(self, save_path, fig, axes, dpi):
         save_to_png = self.save_preferences.get("png", True)
         save_to_svg = self.save_preferences.get("svg", False)
         transparent = self.save_preferences.get("transparent", False)
@@ -26,7 +26,7 @@ class FigureSaver:
                 save_path.with_suffix(".png"),
                 format="png",
                 transparent=transparent,
-                dpi=300,
+                dpi=dpi,
                 bbox_inches="tight",
             )
 
@@ -35,7 +35,7 @@ class FigureSaver:
                 save_path.with_suffix(".svg"),
                 format="svg",
                 transparent=transparent,
-                dpi=300,
+                dpi=dpi,
                 bbox_inches="tight",
             )
 

@@ -289,12 +289,9 @@ Example:
         "fit": true,
         "plot": true,
         "plot_residuals": true,
-        "display_chi_square": true
-    },
-    "save_preferences": {
-        "transparent": false,
-        "png": true,
-        "svg": false
+        "display_chi_square": true,
+        "fitting_frequency_range": null,
+        "compute_mean_parameters" : true
     },
     "plotting_limits": {
         "R_and_Q": {
@@ -308,9 +305,18 @@ Example:
             ]
         },
         "conductivities": {
-            "left_ylim": null,
+            "left_ylim": [
+                1e-10,
+                1e-4
+            ],
             "right_ylim": null
         }
+    },
+    "save_preferences": {
+        "transparent": false,
+        "png": true,
+        "svg": false,
+        "dpi": 250
     },
     "full_terminal": true
 }
@@ -352,6 +358,8 @@ and processed outputs are written to:
 | `run.plot` | Master switch for plot generation. If `false`, the workflow can still fit and write CSV files without creating figures. |
 | `run.plot_residuals` | If `true`, residual plots are generated when fit plotting is enabled. |
 | `run.display_chi_square` | If `true`, fitted Bode/Nyquist plots display chi-square information. |
+| `run.fitting_frequency_range` | Frequency window used for fitting, in Hz. Use `null` to fit the full spectrum, or `[f_min, f_max]` to restrict the fit. One-sided ranges such as `[1, null]` or `[null, 100000]` are also supported. |
+| `run.compute_mean_parameters` | If `true`, appends one `MEAN` row to each circuit parameter CSV. The mean is computed over successful fits only. Parameter uncertainties are propagated from individual fitted standard deviations. |
 
 #### `save_preferences`
 
@@ -360,6 +368,7 @@ and processed outputs are written to:
 | `save_preferences.transparent` | If `true`, figures are saved with a transparent background. |
 | `save_preferences.png` | If `true`, figures are saved as PNG files. |
 | `save_preferences.svg` | If `true`, figures are saved as SVG files. |
+| `save_preferences.dpi` | Resolution used when saving raster figures such as PNG. Defaults to `300` if not specified. Lower values speed up plotting and reduce file size; higher values are useful for publication-quality figures. |
 
 These options used to live in the method file, but they are now global because they describe how the workflow saves figures rather than the scientific method itself.
 
@@ -509,12 +518,6 @@ if __name__ == "__main__":
 Then run from the repository root:
 
 ```bash
-python main.py
-```
-
-or, if the project is installed as a package:
-
-```bash
 python -m eis_fitting.main
 ```
 
@@ -604,6 +607,12 @@ and rerun the workflow.
 The fitted parameter CSV files are kept, while the plotter can recreate the Bode, Nyquist, residual, and analysis plots from the existing processed CSVs and fit results.
 
 Do not delete the circuit CSV files if the goal is only to change figure style, axis limits, residual display, or save format.
+
+### Mean parameter computation
+
+If `run.compute_mean_parameters` is enabled, the analyser appends one summary row to each circuit-specific parameter CSV. This row is labelled `MEAN` and is computed over all successful sample fits in the experiment.
+
+Failed fits are excluded from the mean.
 
 ## 9. Output structure
 
@@ -758,7 +767,7 @@ For each selected circuit and each sample, the fitter:
 1. reads the processed experimental EIS CSV
 2. builds the complex impedance array
 3. creates a `CustomCircuit`
-4. fits the circuit using the supplied initial guesses
+4. fits the circuit using the supplied initial guesses (optionally restricting the data to`run.fitting_frequency_range`)
 5. predicts the fitted impedance
 6. extracts fitted parameters
 7. calculates standard deviations and percentage errors where possible
@@ -879,16 +888,25 @@ alpha_DL_percent_error
 conductivity_S_cm_R_i
 SD_conductivity_S_cm_R_i
 conductivity_S_cm_R_bulk
-SD_conductivity_S_cm_R_bulk
+SD_conductivity_S_cm_R_bulk`
+f_min_fit_Hz
+f_max_fit_Hz
+n_fit_points
 ```
 
-<p align="center">
-  <img src="./resources/circuit.png" height="300">
-</p>
+If `run.compute_mean_parameters` is enabled, the CSV contains an additional summary row:
+
+```text
+sample = MEAN
+fit_status = mean_all_successful_samples
+is_summary = True
+n_mean_samples = <number of successful fits>
 
 Different circuits may have different columns, depending on the circuit elements and on which resistances have `compute_conductivity=True`.
 
 If a fit is rejected, the CSV row still records the sample, circuit, `fit_success=False`, the error message, and `NaN` fit metrics. This makes failed fits visible without silently dropping samples.
+
+When a restricted fitting frequency range is used, the CSV records the actual frequency window used for each fit. This makes it possible to trace whether parameters were obtained from the full spectrum or from a selected frequency interval.
 
 > Small fitted values, especially CPE magnitudes, should be saved in scientific notation. The code should avoid rounding fitted parameters directly in `_fit_one`, because values such as `1e-9` can otherwise be rounded to `0.0`.
 
@@ -1130,10 +1148,11 @@ Controlled by:
 
 ```json
 "save_preferences": {
-    "png": true,
-    "svg": true,
-    "transparent": true
-}
+        "transparent": false,
+        "png": true,
+        "svg": false,
+        "dpi": 250
+    }
 ```
 
 Possible options:
@@ -1143,6 +1162,9 @@ Possible options:
 | `png` | Save PNG figures. |
 | `svg` | Save SVG figures. |
 | `transparent` | Save figures with transparent backgrounds. |
+| `dpi` | Resolution for raster exports such as PNG. Defaults to `300`. |
+
+The `dpi` option is especially useful when balancing speed, file size, and figure quality. For quick testing, values such as `100` or `150` can make plotting faster. For reports or publications, `300` or higher is recommended.
 
 ### 16.2 Plotting limits
 
@@ -1332,18 +1354,20 @@ In `global.json`:
 
 ```json
 "run": {
-    "pre_plot": true,
-    "fit": true,
-    "plot": true,
-    "plot_residuals": true,
-    "display_chi_square": true
+        "pre_plot": false,
+        "fit": true,
+        "plot": true,
+        "plot_residuals": true,
+        "display_chi_square": true,
+        "fitting_frequency_range": null,
+        "compute_mean_parameters" : true
 }
 ```
 
 Run:
 
 ```bash
-python main.py
+python -m eis_fitting.main
 ```
 
 Inspect the preliminary Bode and Nyquist plots.
@@ -1359,7 +1383,7 @@ After manual cleaning, set in `global.json`:
 Run:
 
 ```bash
-python main.py
+python -m eis_fitting.main
 ```
 
 The workflow will fit the selected circuits and create fit plots.
@@ -1375,6 +1399,8 @@ Inspect:
 - parameter uncertainties
 - whether fitted parameters are physically meaningful
 - whether any fits were rejected because parameter error exceeded 100 %
+
+> If `run.compute_mean_parameters` is enabled, inspect the `MEAN` row in each circuit parameter CSV to compare experiment-level average fitted parameters.
 
 ### Step 6: Inspect conductivity
 
@@ -1403,7 +1429,7 @@ fits/plots/
 Then rerun:
 
 ```bash
-python main.py
+python -m eis_fitting.main
 ```
 
 The workflow will preserve the existing fit CSVs and regenerate the plots.
@@ -1548,5 +1574,7 @@ The current object-oriented version supports:
 - replotting without refitting by deleting only `fits/plots/`
 - rejection of non-identifiable fits when parameter percentage error exceeds 100 %
 - progress bars and terminal output options
+- optional computation of experiment-level mean fitted parameters per circuit
+- propagated uncertainties for mean parameter rows
 
 This version is intended as a robust research workflow before packaging the project as a reusable Python library.

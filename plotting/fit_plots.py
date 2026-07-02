@@ -28,6 +28,7 @@ class FitPlotter:
         save_folder,
         chi_square=None,
         reduced_chi_square=None,
+        dpi=300
     ):
         """
         Plot measured and fitted Nyquist spectra.
@@ -69,6 +70,7 @@ class FitPlotter:
             save_path=save_folder,
             fig=fig,
             axes={ax},
+            dpi=dpi
         )
 
     def plot_bode(
@@ -80,6 +82,7 @@ class FitPlotter:
         save_folder,
         chi_square=None,
         reduced_chi_square=None,
+        dpi=300
     ):
         """
         Plot measured and fitted Bode magnitude/phase spectra.
@@ -157,6 +160,7 @@ class FitPlotter:
             save_path=save_folder,
             fig=fig,
             axes={axes[0], axes[1]},
+            dpi=dpi
         )
 
     def plot_all_files_for_circuit(
@@ -164,6 +168,7 @@ class FitPlotter:
         fit_data_dict,
         circuit_name,
         save_folder,
+        dpi=300,
     ):
         """
         Plot all samples for one circuit on combined Nyquist and Bode plots.
@@ -202,6 +207,7 @@ class FitPlotter:
             circuit_name=circuit_name,
             save_folder=save_folder,
             palette=palette,
+            dpi=dpi,
         )
 
         self._plot_all_bode(
@@ -209,6 +215,7 @@ class FitPlotter:
             circuit_name=circuit_name,
             save_folder=save_folder,
             palette=palette,
+            dpi=dpi,
         )
 
     def _plot_all_nyquist(
@@ -217,6 +224,7 @@ class FitPlotter:
         circuit_name,
         save_folder,
         palette,
+        dpi=300,
     ):
         fig, ax = plt.subplots(figsize=(9, 5))
 
@@ -259,6 +267,7 @@ class FitPlotter:
             save_path=save_folder / f"all_files_{circuit_name}_nyquist",
             fig=fig,
             axes={ax},
+            dpi=dpi
         )
 
     def _plot_all_bode(
@@ -267,6 +276,7 @@ class FitPlotter:
         circuit_name,
         save_folder,
         palette,
+        dpi=300,
     ):
         fig, axes = plt.subplots(
             2,
@@ -338,6 +348,7 @@ class FitPlotter:
             save_path=save_folder / f"all_files_{circuit_name}_bode",
             fig=fig,
             axes={axes[0], axes[1]},
+            dpi=dpi
         )
 
     def plot_residuals(
@@ -351,6 +362,7 @@ class FitPlotter:
         chi_square=None,
         reduced_chi_square=None,
         invert_frequency_axis=True,
+        dpi=300,
     ):
         """
         Plot relative residuals for one fitted EIS spectrum.
@@ -455,6 +467,7 @@ class FitPlotter:
             save_path=save_folder,
             fig=fig,
             axes={ax_signed, ax_abs},
+            dpi=dpi,
         )
 
     def _add_fit_statistics_box(

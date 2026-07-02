@@ -1,8 +1,8 @@
 {
     "paths": {
         "data_path": "/home/enzos/data/",
-        "user": "femke",
-        "project": "new",
+        "user": "enzo",
+        "project": "test",
         "output_mode": "workspace",
         "output_path": "/home/enzos/data_processed"
     },
@@ -11,12 +11,9 @@
         "fit": true,
         "plot": true,
         "plot_residuals": true,
-        "display_chi_square": true
-    },
-    "save_preferences": {
-        "transparent": false,
-        "png": true,
-        "svg": false
+        "display_chi_square": true,
+        "fitting_frequency_range": null,
+        "compute_mean_parameters" : true
     },
     "plotting_limits": {
         "R_and_Q": {
@@ -36,6 +33,12 @@
             ],
             "right_ylim": null
         }
+    },
+    "save_preferences": {
+        "transparent": false,
+        "png": true,
+        "svg": false,
+        "dpi": 250
     },
     "full_terminal": true
 }

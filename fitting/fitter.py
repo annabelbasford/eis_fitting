@@ -18,6 +18,7 @@ class EISFitter:
     def run(self, experiment, full_terminal=True) -> None:
         output_folder = experiment.paths.fits
         pre_plot_folder = experiment.paths.pre_plots
+        
 
         if pre_plot_folder.is_dir():
             shutil.rmtree(pre_plot_folder)
@@ -32,6 +33,14 @@ class EISFitter:
             if name in self.circuits
         }
 
+        fitting_frequency_range = self._get_fitting_frequency_range(experiment)
+
+        if full_terminal and fitting_frequency_range is not None:
+            print(
+                f"\nUsing fitting frequency range: "
+                f"{fitting_frequency_range[0]} Hz to {fitting_frequency_range[1]} Hz"
+            )
+
         all_results = []
         all_fit_data = {circuit_name: {} for circuit_name in circuits_to_fit}
 
@@ -43,6 +52,23 @@ class EISFitter:
                 print(f"\nFitting: {sample_name}")
 
             freq, z = self.reader.read_impedance(csv_path)
+
+            try:
+                freq, z = self._apply_fitting_frequency_range(
+                    freq=freq,
+                    z=z,
+                    fitting_frequency_range=fitting_frequency_range,
+                )
+
+            except Exception as exc:
+                if full_terminal:
+                    print(
+                        "\033[91m"
+                        + "\033[1m"
+                        + "/!\\"
+                        + "\033[0m"
+                        + f"  Could not apply fitting frequency range: {exc}"
+                    )
 
             for circuit_name, circuit_info in circuits_to_fit.items():
                 result = self._fit_one(
@@ -113,10 +139,7 @@ class EISFitter:
             )
 
             param_names = circuit.get_param_names()[0]
-            mapped_names = [
-                circuit_mapping[param]["name"]
-                for param in param_names
-            ]
+            mapped_names = [circuit_mapping[param]["name"] for param in param_names]
 
             row = {
                 "sample": sample_name,
@@ -143,11 +166,7 @@ class EISFitter:
                 ):
                     row[f"SD_{name}"] = sd
 
-                    if (
-                        value == 0
-                        or not np.isfinite(value)
-                        or not np.isfinite(sd)
-                    ):
+                    if value == 0 or not np.isfinite(value) or not np.isfinite(sd):
                         percent_error = np.inf
                     else:
                         percent_error = abs(100 * sd / value)
@@ -155,9 +174,7 @@ class EISFitter:
                     row[f"{name}_percent_error"] = percent_error
 
                     if percent_error > 100:
-                        bad_parameters.append(
-                            f"{name}: {percent_error:.1f}%"
-                        )
+                        bad_parameters.append(f"{name}: {percent_error:.1f}%")
 
             else:
                 raise RuntimeError(
@@ -177,8 +194,7 @@ class EISFitter:
             }
 
         except Exception as exc:
-            if full_terminal:
-                print("\033[91m" + "\033[1m" + "/!\\" + "\033[0m" + f"  Fit failed: {exc}")
+            print("\033[91m" + "\033[1m" + "/!\\" + "\033[0m" + f"  Fit failed: {exc}")
 
             return {
                 "success": False,
@@ -306,3 +322,74 @@ class EISFitter:
                 parameter_columns.append(display_name)
 
         return parameter_columns
+
+    def _get_fitting_frequency_range(self, experiment):
+        """
+        Return fitting frequency range from experiment.run.
+
+        Expected format:
+            None
+            [f_min, f_max]
+            [f_min, None]
+            [None, f_max]
+
+        Frequencies are in Hz.
+        """
+
+        frequency_range = experiment.run.get("fitting_frequency_range", None)
+
+        if frequency_range is None:
+            return None
+
+        if len(frequency_range) != 2:
+            raise ValueError("\033[91m" + "\033[1m" + "/!\\" + "\033[0m" + "fitting_frequency_range must be None or [f_min, f_max]")
+
+        f_min, f_max = frequency_range
+
+        if f_min is not None:
+            f_min = float(f_min)
+
+        if f_max is not None:
+            f_max = float(f_max)
+
+        if f_min is not None and f_max is not None and f_min >= f_max:
+            raise ValueError("\033[91m" + "\033[1m" + "/!\\" + "\033[0m" +
+                f"Invalid fitting_frequency_range: {frequency_range}. "
+                "Expected f_min < f_max."
+            )
+
+        return f_min, f_max
+
+    def _apply_fitting_frequency_range(
+        self,
+        freq,
+        z,
+        fitting_frequency_range,
+    ):
+        """
+        Select only the frequencies used for fitting.
+        """
+
+        if fitting_frequency_range is None:
+            return freq, z
+
+        f_min, f_max = fitting_frequency_range
+
+        mask = np.ones_like(freq, dtype=bool)
+
+        if f_min is not None:
+            mask &= freq >= f_min
+
+        if f_max is not None:
+            mask &= freq <= f_max
+
+        freq_fit = freq[mask]
+        z_fit_input = z[mask]
+
+        if len(freq_fit) < 3:
+            raise ValueError("\033[91m" + "\033[1m" + "/!\\" + "\033[0m" +
+                "Fitting frequency range selected fewer than 3 points. "
+                f"Range: {fitting_frequency_range}"
+            )
+
+        return freq_fit, z_fit_input

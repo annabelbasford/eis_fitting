@@ -123,6 +123,7 @@ class EISPlotter:
                     ),
                     chi_square=chi_square,
                     reduced_chi_square=reduced_chi_square,
+                    dpi=experiment.save_preferences.get("dpi", 300),
                 )
 
                 fit_plotter.plot_bode(
@@ -135,6 +136,7 @@ class EISPlotter:
                     ),
                     chi_square=chi_square,
                     reduced_chi_square=reduced_chi_square,
+                    dpi=experiment.save_preferences.get("dpi", 300),
                 )
 
                 if plot_residuals:
@@ -150,6 +152,7 @@ class EISPlotter:
                         ),
                         chi_square=chi_square,
                         reduced_chi_square=reduced_chi_square,
+                        dpi=experiment.save_preferences.get("dpi", 300),
                     )
 
         self.plot_all_runs(
@@ -177,6 +180,7 @@ class EISPlotter:
                 fit_data_dict=fit_data_dict,
                 circuit_name=circuit_name,
                 save_folder=all_runs_folder,
+                dpi=experiment.save_preferences.get("dpi", 300),
             )
 
     def plot_analysis_results(self, experiment) -> None:

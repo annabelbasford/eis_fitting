@@ -91,6 +91,7 @@ class AnalysisPlotter:
                     left_ylim=r_and_q_limits.get("left_ylim"),
                     right_ylim=r_and_q_limits.get("right_ylim"),
                     show_alpha=True,
+                    dpi=experiment.save_preferences.get("dpi", 300)
                 )
 
             # One experiment-level R_i conductivity chart
@@ -102,6 +103,7 @@ class AnalysisPlotter:
                 figure_saver=figure_saver,
                 y_lim=conductivities_limits.get("left_ylim"),
                 cmap_name="viridis",
+                dpi=experiment.save_preferences.get("dpi", 300)
             )
 
     def plot_conductivities_summary(
@@ -113,6 +115,7 @@ class AnalysisPlotter:
         figure_saver,
         y_lim=None,
         cmap_name="viridis",
+        dpi=300,
     ):
         """
         Plot one experiment-level conductivity summary per conductivity type.
@@ -324,6 +327,7 @@ class AnalysisPlotter:
                 / f"{experiment_name}_{circuit_name}_{output_suffix}_all_samples",
                 fig=fig,
                 axes={ax},
+                dpi=dpi,
             )
 
     def plot_parameter_bars(
@@ -342,6 +346,7 @@ class AnalysisPlotter:
         left_ylim=None,
         right_ylim=None,
         show_alpha=True,
+        dpi=300,
     ):
         """
         Plot one bar-chart figure for one sample and one circuit.
@@ -466,6 +471,7 @@ class AnalysisPlotter:
             save_path=save_folder / f"{sample}_{circuit_name}_{figure_name}",
             fig=fig,
             axes=axes,
+            dpi=dpi,
         )
 
     def get_parameter_style(self, param, display_mapping):
