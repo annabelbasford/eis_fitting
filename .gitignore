@@ -3,6 +3,9 @@ __pycache__/
 *.pyo
 *.pyd
 
+figures.py
+surfaces.py
+
 .env
 venv/
 .envs/

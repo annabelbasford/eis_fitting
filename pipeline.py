@@ -51,20 +51,33 @@ class EISPipeline:
         run_parameters = experiment.run
 
         if self.full_terminal:
-            print("\033[1m" + f"\n\n# ----- Running experiment: {experiment.name} ----- #\n" + "\033[0m")
-            print("\x1b[4m" + "Description" + "\x1b[24m" + f": {experiment.description}")
-            print("\nInput folder: " + "\x1B[3m" + str(experiment.paths.input) + "\x1B[0m")
-            print(f"Processed output: " + "\x1B[3m" + str(experiment.paths.processed_root) + "\x1B[0m")
+            print(
+                "\033[1m"
+                + f"\n\n# ----- Running experiment: {experiment.name} ----- #\n"
+                + "\033[0m"
+            )
+            print(
+                "\x1b[4m" + "Description" + "\x1b[24m" + f": {experiment.description}"
+            )
+            print(
+                "\nInput folder: " + "\x1b[3m" + str(experiment.paths.input) + "\x1b[0m"
+            )
+            print(
+                f"Processed output: "
+                + "\x1b[3m"
+                + str(experiment.paths.processed_root)
+                + "\x1b[0m"
+            )
 
         # --------------- Preprocessing --------------- #
-        
+
         # If the experiment has never been processed, preprocess it.
         if not experiment.paths.processed_root.is_dir():
             print("\nPreprocessing the raw data")
             EISPreprocessor().run(experiment)
-        
+
         # --------------- Pre-plot / manual-cleaning mode --------------- #
-        
+
         if run_parameters.get("pre_plot", False):
             PreprocessPlotter().plot_folder(
                 input_folder=experiment.paths.csv,
@@ -77,9 +90,9 @@ class EISPipeline:
 
             # to stop execution before fitting and allow for manual preprocessing
             return
-        
+
         # --------------- Fitting --------------- #
-        
+
         all_fit_data = None
 
         if run_parameters.get("fit", True):
@@ -94,11 +107,19 @@ class EISPipeline:
             else:
                 if self.full_terminal:
                     print("Fits folder already exists. Skipping fitting.")
+                all_fit_data = EISFitter(self.circuits).load_fit_data(experiment)
 
-        
+                if not all_fit_data:
+                    if self.full_terminal:
+                        print("No existing fit data found. Running fitting instead.")
+
+                    all_fit_data = EISFitter(self.circuits).run(
+                        experiment,
+                        full_terminal=self.full_terminal,
+                    )
+
         # --------------- Analysis and plotting --------------- #
 
-        
         # Analysis can be run from newly generated fits or existing fit CSVs.
         if experiment.paths.fits.is_dir():
 

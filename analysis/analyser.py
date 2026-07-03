@@ -90,7 +90,9 @@ class EISAnalyser:
             SD is the sample standard deviation across successful fits.
         """
 
-        if "fit_success" not in df.columns:
+        has_mean_row = (df["sample"].astype(str).str.strip().str.upper() == "MEAN").any()
+
+        if "fit_success" not in df.columns or has_mean_row:
             return df
 
         successful_df = df[df["fit_success"] == True].copy()

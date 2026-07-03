@@ -1,8 +1,8 @@
 {
     "paths": {
         "data_path": "/home/enzos/data/",
-        "user": "enzo",
-        "project": "test",
+        "user": "dryshia",
+        "project": "EIS_hydrogels",
         "output_mode": "workspace",
         "output_path": "/home/enzos/data_processed"
     },

@@ -393,3 +393,143 @@ class EISFitter:
             )
 
         return freq_fit, z_fit_input
+    
+    def load_fit_data(self, experiment):
+        """
+        Load existing fitted parameter CSVs and rebuild the fitted impedance
+        curves so Bode, Nyquist and residual plots can be regenerated without
+        refitting.
+        """
+
+        def read_impedance_csv(csv_path):
+            df = pd.read_csv(csv_path)
+
+            freq = pd.to_numeric(df["freq/Hz"], errors="coerce")
+
+            z_real = pd.to_numeric(df["Re(Z)/Ohm"], errors="coerce")
+            z_imag = -pd.to_numeric(df["-Im(Z)/Ohm"], errors="coerce")
+
+
+            Z = z_real.to_numpy() + 1j * z_imag.to_numpy()
+            freq = freq.to_numpy(dtype=float)
+
+            valid = (
+                np.isfinite(freq)
+                & (freq > 0)
+                & np.isfinite(Z.real)
+                & np.isfinite(Z.imag)
+            )
+
+            return freq[valid], Z[valid]
+
+        def find_sample_csv(sample_name):
+            direct_path = experiment.paths.csv / f"{sample_name}.csv"
+
+            if direct_path.exists():
+                return direct_path
+
+            matches = sorted(experiment.paths.csv.glob(f"{sample_name}*.csv"))
+
+            if matches:
+                return matches[0]
+
+            return None
+
+        def extract_parameters(row, raw_param_names, mapping):
+            values = []
+
+            for raw_name in raw_param_names:
+                mapped_name = mapping.get(raw_name, {}).get("name", raw_name)
+
+                if mapped_name in row.index and pd.notna(row[mapped_name]):
+                    value = row[mapped_name]
+
+                elif raw_name in row.index and pd.notna(row[raw_name]):
+                    value = row[raw_name]
+
+                else:
+                    print(
+                        f"Missing fitted parameter: "
+                        f"{raw_name} / {mapped_name}"
+                    )
+                    return None
+
+                values.append(float(value))
+
+            return np.asarray(values, dtype=float)
+
+        all_fit_data = {}
+
+        for circuit_name in experiment.circuits:
+            parameter_csv = (
+                experiment.paths.fits
+                / f"{experiment.name}_{circuit_name}.csv"
+            )
+
+            if not parameter_csv.exists():
+                print(f"Skipping missing fit file: {parameter_csv}")
+                continue
+
+            df_params = pd.read_csv(parameter_csv)
+
+            circuit_config = self.circuits[circuit_name]
+            circuit_string = circuit_config["string"]
+            initial_guess = circuit_config["guess"]
+            mapping = circuit_config.get("mapping", {})
+
+            temp_circuit = CustomCircuit(
+                circuit=circuit_string,
+                initial_guess=initial_guess,
+            )
+
+            raw_param_names = temp_circuit.get_param_names()[0]
+
+            for _, row in df_params.iterrows():
+                sample_name = str(row["sample"])
+
+                if sample_name.upper() == "MEAN" or not row["fit_success"]:
+                    continue
+
+                sample_csv = find_sample_csv(sample_name)
+
+                fitted_parameters = extract_parameters(
+                    row=row,
+                    raw_param_names=raw_param_names,
+                    mapping=mapping,
+                )
+
+                if fitted_parameters is None:
+                    continue
+
+                freq, Z_exp = read_impedance_csv(sample_csv)
+
+                fitted_circuit = CustomCircuit(
+                    circuit=circuit_string,
+                    initial_guess=list(fitted_parameters),
+                )
+
+                fitted_circuit.parameters_ = fitted_parameters
+
+                Z_fit = fitted_circuit.predict(freq)
+
+                fit_entry = row.to_dict()
+
+                fit_entry.update(
+                    {
+                        "sample": sample_name,
+                        "circuit_name": circuit_name,
+                        "circuit_string": circuit_string,
+                        "freq": freq,
+                        "Z": Z_exp,
+                        "Z_fit": Z_fit,
+                        "fitted_parameters": fitted_parameters,
+                        "raw_param_names": raw_param_names,
+                        "sample_csv": sample_csv,
+                        "parameter_csv": parameter_csv,
+                    }
+                )
+
+                all_fit_data.setdefault(circuit_name, {})
+                all_fit_data[circuit_name][sample_name] = fit_entry
+
+        return all_fit_data

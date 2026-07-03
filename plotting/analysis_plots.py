@@ -207,6 +207,9 @@ class AnalysisPlotter:
 
         for conductivity_col in conductivity_columns:
 
+            if conductivity_col.endswith("_percent_error"):
+                continue
+
             sd_col = f"SD_{conductivity_col}"
 
             values = pd.to_numeric(

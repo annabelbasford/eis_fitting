@@ -28,8 +28,8 @@ EISPipeline
     ├── EISPreprocessor
     │       ├── cleans raw EIS files
     │       ├── converts BioLogic .mpr files when needed
-    │       ├── splits non-monotonic frequency sweeps
-    │       └── creates pre-fitting Bode/Nyquist plots
+    │       ├── splits frequency sweeps in distinct files
+    │       └── can creates pre-fitting Bode/Nyquist plots for manual preprocessing
     │
     ├── EISFitter
     │       ├── fits selected equivalent circuits
@@ -49,32 +49,37 @@ The aim is to keep each class responsible for one task.
 
 | Class | Role |
 |---|---|
-| `EISPipeline` | Coordinates the complete workflow. |
-| `ConfigLoader` | Loads `global.json`, experiment `metadata.json`, and reusable method files. |
-| `Experiment` | Stores merged experiment settings, paths, selected circuits, geometry, and run options. |
-| `EISPreprocessor` | Converts, cleans, splits, and prepares raw EIS data. |
-| `EISFitter` | Fits equivalent circuits, calculates fit metrics, and saves fitted parameters. |
-| `FitMetrics` | Calculates residuals, chi-square, and reduced chi-square. |
-| `FitPlotter` | Creates Bode, Nyquist, and residual plots of experimental vs fitted data. |
-| `EISAnalyser` | Adds derived quantities, especially conductivities requested in the circuit mapping. |
-| `AnalysisPlotter` | Creates parameter and conductivity bar charts. |
-| `FigureSaver` | Saves figures according to global saving preferences, e.g. PNG, SVG, transparent background. |
+| `EISPipeline` | Coordinates the complete workflow |
+| `ConfigLoader` | Loads `global.json`, experiment `metadata.json`, and reusable method files |
+| `Experiment` | Stores merged experiment settings, paths, selected circuits, geometry, and run options |
+| `EISPreprocessor` | Converts, cleans, splits, and prepares raw EIS data |
+|`PreprocessPlotter`| Plots Bode (phase and modulus) with visible points for manual removal of outliers |
+| `EISFitter` | Fits equivalent circuits, calculates fit metrics, and saves fitted parameters |
+| `FitMetrics` | Calculates residuals, chi-square, and reduced chi-square |
+| `FitPlotter` | Creates Bode, Nyquist, and residual plots of experimental vs fitted data |
+| `EISAnalyser` | Adds derived quantities, especially conductivities requested in the circuit mapping |
+| `AnalysisPlotter` | Creates parameter and conductivity bar charts |
+| `FigureSaver` | Saves figures according to global saving preferences, e.g. PNG, SVG, transparent background, dpi |
 
 ## 2. Installation
 
-Clone the repository:
+### Clone the repository:
 
 ```bash
 git clone git@github.com:<your-username>/eis_fitting.git
 cd eis_fitting
 ```
 
-Create and activate a virtual environment:
+### Create and activate a virtual environment (recommended):
+
+Using conda:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+conda create -n eis_fitting python=3.11
+conda activate eis_fitting
 ```
+
+### Install dependencies
 
 Upgrade `pip`:
 
@@ -82,7 +87,7 @@ Upgrade `pip`:
 pip install --upgrade pip
 ```
 
-Install the project dependencies:
+Install the project dependencies (`requirements.txt` can be deleted afterwards):
 
 ```bash
 pip install -r requirements.txt
@@ -98,35 +103,12 @@ If not, run from the repository root so that the local imports work correctly.
 
 ---
 
-## 3. Main dependencies
-
-The main Python dependencies are:
-
-```text
-numpy
-pandas
-matplotlib
-scipy
-impedance
-tqdm
-galvani
-seaborn
-```
-
-In order to install all of them in your virtual environment you can download the `requirements.txt` file in your directory and run :
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## 4. Data organisation
+## 3. Data organisation
 
 The project is designed around:
 
 1. a root-level `global.json` file in the project repository;
-2. one `_methods/` folder containing reusable method files;
+2. one `_methods/` folder with the data, containing reusable method files;
 3. experiment folders organised by user/project/experiment.
 
 Current architecture:
@@ -135,15 +117,15 @@ Current architecture:
 eis_fitting/
 ├── main.py
 ├── global.json
-└── eis_fitting/
-    ├── pipeline.py
-    ├── circuits.py
-    ├── config/
-    ├── core/
-    ├── preprocessing/
-    ├── fitting/
-    ├── analysis/
-    └── plotting/
+├── pipeline.py
+├── circuits.py
+|
+├── config/
+├── core/
+├── preprocessing/
+├── fitting/
+├── analysis/
+└── plotting/
 
 data/
 ├── _methods/
@@ -163,7 +145,7 @@ data/
 ├── _methods/
 │   └── conductive_hydrogel.json
 │
-└── Annabel/eis_flex/AB-01-001/
+└── Bel/eis_flex/AB-01-001/
     ├── AB-01-001_01_01.csv
     ├── AB-01-001_01_02.csv
     └── metadata.json
@@ -178,32 +160,11 @@ It should not contain manually created fitting, analysis, or plotting folders. T
 
 The `_methods/` folder stores reusable method-level scientific settings, such as sample geometry and method-level frequency uncertainty. Figure-saving preferences are not stored in method files anymore; they are controlled globally from `global.json`.
 
-## 5. Local mode and workspace mode
+## 4. Local mode and workspace mode
 
-The workflow can be used in two data-management modes.
+The workflow can be used in two data-management modes (see section `5.1 Global configuration file`).
 
-### 5.1 Local mode
-
-In local mode, processed files are written inside the experiment folder itself.
-
-Example:
-
-```text
-data/
-└── Annabel/eis_flex/AB-01-001/
-    ├── AB-01-001_01_01.csv
-    ├── AB-01-001_01_02.csv
-    ├── metadata.json
-    └── processed/
-        ├── csv/
-        └── fits/
-            ├── AB-01-001_circuit_2.csv
-            └── plots/
-```
-
-This mode keeps the raw and processed data together. It is simple and useful for small projects or quick testing.
-
-### 5.2 Workspace mode
+### 4.1 Workspace mode (recommended)
 
 In workspace mode, raw data and processed data are separated.
 
@@ -223,16 +184,16 @@ Example:
 
 ```text
 raw data:
-data/Annabel/eis_flex/AB-01-001/
+data/Bel/eis_flex/AB-01-001/
 
 processed data:
-workspace/processed/Annabel/eis_flex/AB-01-001/
+workspace/processed/Bel/eis_flex/AB-01-001/
 ```
 
 The processed experiment folder then contains:
 
 ```text
-workspace/processed/Annabel/eis_flex/AB-01-001/
+workspace/processed/Bel/eis_flex/AB-01-001/
 ├── csv/
 │   ├── AB-01-001_01_01.csv
 │   └── AB-01-001_01_02.csv
@@ -247,9 +208,30 @@ workspace/processed/Annabel/eis_flex/AB-01-001/
 
 Workspace mode is recommended for larger projects because the original raw data remain untouched and all generated files are stored separately.
 
+### 4.2 Local mode
+
+In local mode, processed files are written inside the experiment folder itself.
+
+Example:
+
+```text
+data/
+└── Bel/eis_flex/AB-01-001/
+    ├── AB-01-001_01_01.csv
+    ├── AB-01-001_01_02.csv
+    ├── metadata.json
+    └── processed/
+        ├── csv/
+        └── fits/
+            ├── AB-01-001_circuit_2.csv
+            └── plots/
+```
+
+This mode keeps the raw and processed data together. It is simple and useful for small projects or quick testing.
+
 ---
 
-## 6. Metadata, method files, and global configuration
+## 5. Metadata, method files, and global configuration
 
 The current architecture uses three JSON layers:
 
@@ -262,14 +244,14 @@ The separation is:
 ```text
 global.json      → paths, run options, plotting options, save preferences
 metadata.json    → experiment description, method name, selected circuits
-_methods/*.json  → reusable scientific method settings, especially geometry
+_methods/*.json  → reusable scientific method settings, (only cell geometry for now)
 ```
 
 This avoids repeating geometry and run options in every experiment folder.
 
 ---
 
-### 6.1 Global configuration file
+### 5.1 Global configuration file
 
 The root-level `global.json` file is placed next to `main.py`.
 
@@ -322,55 +304,37 @@ Example:
 }
 ```
 
----
-
-### 6.2 Global configuration fields
-
 #### `paths`
 
 | Field | Meaning |
 |---|---|
-| `paths.data_path` | Root folder containing the raw data and the `_methods/` folder. |
-| `paths.methods_path` | Folder containing reusable method files. If omitted, this can default to `<data_path>/_methods`. |
-| `paths.user` | User/person folder inside `data_path`. |
-| `paths.project` | Project folder inside `data_path/user`. |
-| `paths.output_mode` | Either `"local"` or `"workspace"`. |
-| `paths.output_path` | Root output folder used in workspace mode. Required if `output_mode` is `"workspace"`. |
-
-In workspace mode, raw data remain in:
-
-```text
-data/<user>/<project>/<experiment>/
-```
-
-and processed outputs are written to:
-
-```text
-<output_path>/processed/<user>/<project>/<experiment>/
-```
+| `paths.data_path` | Root folder containing the raw data and the `_methods/` folder |
+| `paths.methods_path` | Folder containing reusable method files. If omitted, this can default to `<data_path>/_methods` |
+| `paths.user` | User/person folder inside `data_path` |
+| `paths.project` | Project folder inside `data_path/user` |
+| `paths.output_mode` | Either `"local"` or `"workspace"` |
+| `paths.output_path` | Root output folder used in workspace mode. Required if `output_mode` is `"workspace"` |
 
 #### `run`
 
 | Field | Meaning |
 |---|---|
-| `run.pre_plot` | If `true`, preprocess only and create preliminary plots. No fitting or analysis is performed afterwards. |
-| `run.fit` | If `true`, fitting is allowed when no fitted CSVs exist yet. |
-| `run.plot` | Master switch for plot generation. If `false`, the workflow can still fit and write CSV files without creating figures. |
-| `run.plot_residuals` | If `true`, residual plots are generated when fit plotting is enabled. |
-| `run.display_chi_square` | If `true`, fitted Bode/Nyquist plots display chi-square information. |
-| `run.fitting_frequency_range` | Frequency window used for fitting, in Hz. Use `null` to fit the full spectrum, or `[f_min, f_max]` to restrict the fit. One-sided ranges such as `[1, null]` or `[null, 100000]` are also supported. |
-| `run.compute_mean_parameters` | If `true`, appends one `MEAN` row to each circuit parameter CSV. The mean is computed over successful fits only. Parameter uncertainties are propagated from individual fitted standard deviations. |
+| `run.pre_plot` | If `true`, preprocess only and create preliminary plots. No fitting or analysis is performed afterwards |
+| `run.fit` | If `true`, fitting is allowed when no fitted CSVs exist yet |
+| `run.plot` | Master switch for plot generation. If `false`, the workflow can still fit and write CSV files without creating figures |
+| `run.plot_residuals` | If `true`, residual plots are generated when fit plotting is enabled |
+| `run.display_chi_square` | If `true`, fitted Bode/Nyquist plots display chi-square information |
+| `run.fitting_frequency_range` | Frequency window used for fitting, in Hz. Use `null` to fit the full spectrum, or `[f_min, f_max]` to restrict the fit. One-sided ranges such as `[1, null]` or `[null, 100000]` are also supported |
+| `run.compute_mean_parameters` | If `true`, appends one `MEAN` row to each circuit parameter CSV. The mean is computed over successful fits only. Parameter uncertainties are propagated from individual fitted standard deviations using $u(\bar{x}) = \sqrt{\sum_i u_i^2}/n$. Since $\chi^2$ and $\chi^2_{\mathrm{reduced}}$ do not have individual fitted uncertainties, their uncertainty is estimated from the sample-to-sample standard deviation across successful fits. |
 
 #### `save_preferences`
 
 | Field | Meaning |
 |---|---|
-| `save_preferences.transparent` | If `true`, figures are saved with a transparent background. |
-| `save_preferences.png` | If `true`, figures are saved as PNG files. |
-| `save_preferences.svg` | If `true`, figures are saved as SVG files. |
-| `save_preferences.dpi` | Resolution used when saving raster figures such as PNG. Defaults to `300` if not specified. Lower values speed up plotting and reduce file size; higher values are useful for publication-quality figures. |
-
-These options used to live in the method file, but they are now global because they describe how the workflow saves figures rather than the scientific method itself.
+| `save_preferences.transparent` | If `true`, figures are saved with a transparent background |
+| `save_preferences.png` | If `true`, figures are saved as PNG files |
+| `save_preferences.svg` | If `true`, figures are saved as SVG files |
+| `save_preferences.dpi` | Resolution used when saving raster figures such as PNG. Defaults to `300` if not specified. Lower values speed up plotting and reduce file size; higher values are useful for publication-quality figures |
 
 #### `plotting_limits`
 
@@ -393,7 +357,7 @@ If `true`, the workflow prints more information about selected experiments, path
 
 ---
 
-### 6.3 Experiment metadata file
+### 5.2 Experiment metadata file
 
 Each experiment must contain a `metadata.json` file.
 
@@ -427,21 +391,17 @@ loads:
 data/_methods/conductive_hydrogel.json
 ```
 
-Run options such as `pre_plot`, `plot`, `plot_residuals`, and `display_chi_square` are not stored in each experiment metadata file anymore. They are controlled globally from `global.json`.
-
----
-
-### 6.4 Experiment metadata fields
+Run options such as `pre_plot`, `plot`, `plot_residuals`, and `display_chi_square` are not stored in each experiment metadata but are rather controlled globally from `global.json`.
 
 | Field | Meaning |
 |---|---|
-| `method` | Name of the method file to load from `data/_methods/`, without the `.json` extension. |
-| `description` | Free-text description of the experiment. |
-| `circuits` | List of circuit names to fit. These names must exist in the circuit dictionary. |
+| `method` | Name of the method file to load from `data/_methods/`, without the `.json` extension |
+| `description` | Free-text description of the experiment |
+| `circuits` | List of circuit names to fit. These names must exist in the circuit dictionary |
 
 ---
 
-### 6.5 Method file
+### 5.3 Method file
 
 Method files are stored in:
 
@@ -468,66 +428,24 @@ Example method file:
 }
 ```
 
----
-
-### 6.6 Method file fields
-
 | Field | Meaning |
 |---|---|
-| `geometry.thickness_cm` | Sample thickness in cm. |
-| `geometry.SD_thickness_cm` | Standard deviation or uncertainty of thickness. |
-| `geometry.area_cm2` | Electrode/sample area in cm². |
-| `geometry.SD_area_cm2` | Standard deviation or uncertainty of area. |
+| `geometry.thickness_cm` | Sample thickness in cm |
+| `geometry.SD_thickness_cm` | Uncertainty of thickness measurement |
+| `geometry.area_cm2` | Electrode/sample area in cm² |
+| `geometry.SD_area_cm2` | Uncertainty over area measurement |
 
-The method file should contain reusable scientific constants. It should not contain plotting preferences.
+## 6. Running the workflow
 
-## 7. Running the workflow
+### 6.1 `main.py` file
 
-The workflow is launched from `main.py`.
-
-The current structure keeps `main.py` short. It loads `global.json`, creates the pipeline, and runs the project specified in the global configuration.
-
-A typical `main.py` structure is:
-
-```python
-from pathlib import Path
-
-from eis_fitting import CIRCUITS, EISPipeline
-from eis_fitting.config import ConfigLoader
-
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-GLOBAL_CONFIG_PATH = PROJECT_ROOT / "global.json"
-
-
-def main():
-    global_config = ConfigLoader.load_global_config(GLOBAL_CONFIG_PATH)
-
-    pipeline = EISPipeline(
-        global_config=global_config,
-        circuits=CIRCUITS,
-    )
-
-    pipeline.run_project()
-
-
-if __name__ == "__main__":
-    main()
-```
-
-Then run from the repository root:
-
-```bash
-python -m eis_fitting.main
-```
+The workflow is launched from `main.py`. The current structure keeps `main.py` short, loading `global.json`, creating the pipeline, and running the project specified in the global configuration.
 
 The person, project, input path, output mode, and output path are read from `global.json`, so they do not need to be edited directly in `main.py`.
 
-## 8. Pipeline behaviour
+The run behaviour (see following subsections) is controlled by `global.json` and by whether processed results already exist.
 
-The run behaviour is controlled by `global.json` and by whether processed results already exist.
-
-### 8.1 Preprocessing-only mode
+### 6.2 Preprocessing-only mode
 
 If:
 
@@ -547,11 +465,9 @@ cleaned CSVs
 pre-fit Bode/Nyquist plots
 ```
 
-No equivalent-circuit fitting is performed.
+This mode is intended for manual inspection and cleaning. After checking the preliminary plots, the user can manually remove bad points from the cleaned CSV files before running the workflow without any more pre-plotting to proceed with the fitting.
 
-This mode is intended for manual inspection and cleaning. After checking the preliminary plots, the user can manually remove bad points from the cleaned CSV files before running the fitting workflow.
-
-### 8.2 Fitting mode
+### 6.3 Fitting mode
 
 If:
 
@@ -578,7 +494,7 @@ fitted Bode/Nyquist/residual plots
 analysis plots
 ```
 
-### 8.3 Fitting without plotting
+### 6.4 Fitting without plotting
 
 If plotting is disabled in `global.json`, the fitter can generate fitted-parameter CSV files without producing figures.
 
@@ -588,7 +504,7 @@ If plotting is disabled in `global.json`, the fitter can generate fitted-paramet
 
 This is useful for quick batch fitting or when only the numerical results are needed.
 
-### 8.4 Replotting without refitting
+### 6.5 Re-plotting without refitting
 
 If fit CSV files already exist, the pipeline does not need to refit the data. To regenerate plots without refitting, delete only the plot folder:
 
@@ -604,17 +520,9 @@ Then make sure plotting is enabled in `global.json`:
 
 and rerun the workflow.
 
-The fitted parameter CSV files are kept, while the plotter can recreate the Bode, Nyquist, residual, and analysis plots from the existing processed CSVs and fit results.
+The fitted parameter CSV files are kept, while the plotter can recreate the Bode, Nyquist, residual, and analysis plots with new plotting limits, saving format, dpi, ...
 
-Do not delete the circuit CSV files if the goal is only to change figure style, axis limits, residual display, or save format.
-
-### Mean parameter computation
-
-If `run.compute_mean_parameters` is enabled, the analyser appends one summary row to each circuit-specific parameter CSV. This row is labelled `MEAN` and is computed over all successful sample fits in the experiment.
-
-Failed fits are excluded from the mean.
-
-## 9. Output structure
+## 7. Output structure
 
 A typical processed experiment has the following structure:
 
@@ -652,102 +560,84 @@ processed/<person>/<project>/<experiment>/
 
 If a fit is rejected because one or more parameter percentage errors exceed 100 %, the parameter CSV records the failure. In that case, no Bode, Nyquist, residual, or bar plots are generated for that failed fit. Depending on when the output folders are created, an empty plot folder may remain; this is expected and indicates that the fit was skipped after validation.
 
-## 10. Equivalent circuits
+## 8. Equivalent circuits
 
 Equivalent circuits are defined in the circuit dictionary, usually in a file such as:
 
 ```text
-projects/eis_fitting/eis_fitting/circuits.py
+projects/eis_fitting/circuits.py
 ```
 
 Each circuit entry contains:
 
-- a circuit string
-- one or several initial guesses
+- a circuit string in `impedance.py` syntax
+- an initial guess for each component parameter to be used by the complex, non-linear, least squares fitting method
 - a mapping dictionary for readable parameter names, colours, plotting order, and conductivity calculation
 
 Example:
 
 ```python
 CIRCUITS = {
-    "ionic_1": {
-        "string": "R_1-p(R_2,CPE_1)-CPE_2",
+    "circuit_1": {
+        "string": "p(R_1-CPE_1,R_2)",
         "guess": [
-            80,
-            2000,
-            1e-4,
-            0.8,
-            2e-5,
-            0.95,
+            1000,  # R_1 = R_i
+            1e-6,  # CPE_1_0 =Q_DL
+            0.9,  # CPE_1_1 = alpha_DL
+            1e7,  # R_2 = R_e
         ],
         "mapping": {
             "R_1": {
                 "name": "R_i",
                 "colour": "#80D4F8",
-                "order": 0,
                 "compute_conductivity": True,
+                "order": 0,
             },
             "R_2": {
-                "name": "R_bulk",
+                "name": "R_e",
                 "colour": "#F37F8C",
                 "order": 1,
-                "compute_conductivity": True,
             },
             "CPE_1_0": {
-                "name": "Q_bulk",
-                "colour": "#F49A80",
+                "name": "Q_DL",
+                "colour": "#7C84C2",
                 "order": 0,
             },
             "CPE_1_1": {
-                "name": "alpha_bulk",
-                "colour": "#F49A80",
-                "order": 0,
-            },
-            "CPE_2_0": {
-                "name": "Q_DL",
-                "colour": "#7C84C2",
-                "order": 1,
-            },
-            "CPE_2_1": {
                 "name": "alpha_DL",
                 "colour": "#7C84C2",
-                "order": 1,
+                "order": 0,
             },
         },
     },
+    ...
 }
 ```
 
-In this example, conductivities are computed only for `R_i` and `R_bulk`, because these are the only resistances with:
+In this example, conductivities are computed only for `R_i` because it is the only resistance with:
 
 ```python
 "compute_conductivity": True
 ```
 
-Resistances such as contact resistance, charge-transfer resistance, or interfacial resistances should usually have:
-
-```python
-"compute_conductivity": False
-```
-
-or omit the field entirely.
+Plotting examples :
 
 <p align="center">
   <img src="./resources/DK_circuit_1_bar.png" height="300">
-  <img src="./resources/DK_circuit_1_bode.png" height="300">
+  <img src="./resources/circuit_2_Ri_conductivity_all_samples.png" height="300">
 </p>
 
 > Note that the names displayed in the parameter bars do not follow the `impedance.py` string naming convention directly. They use the readable names defined in the circuit mapping.
 
 ### Circuit syntax
 
-The circuit syntax follows the `impedance.py` `CustomCircuit` convention.
+The circuit syntax follows the `impedance.models.circuits.circuits.CustomCircuit` convention.
 
 | Syntax | Meaning |
 |---|---|
-| `R_1-R_2` | Series connection. |
-| `p(R_1,CPE_1)` | Parallel connection. |
-| `CPE_1` | Constant phase element with two parameters: `CPE_1_0` and `CPE_1_1`. |
+| `R_1-R_2` | Series connection |
+| `p(R_1,CPE_1)` | Parallel connection |
+| `CPE_1` | Constant phase element with two parameters: $Q$: `CPE_1_0` and $\alpha$: `CPE_1_1` from $Z_{CPE}=\frac{1}{Q(j\omega)^{\alpha}}$ |
 
 ### Mapping fields
 
@@ -760,18 +650,20 @@ The circuit syntax follows the `impedance.py` `CustomCircuit` convention.
 
 The `compute_conductivity` field is only meaningful for resistance elements.
 
-## 11. Fitting
+--- 
+
+## 9. Fitting
 
 For each selected circuit and each sample, the fitter:
 
 1. reads the processed experimental EIS CSV
 2. builds the complex impedance array
 3. creates a `CustomCircuit`
-4. fits the circuit using the supplied initial guesses (optionally restricting the data to`run.fitting_frequency_range`)
+4. fits the circuit using the supplied initial guesses (optionally restricting the data to `run.fitting_frequency_range`)
 5. predicts the fitted impedance
 6. extracts fitted parameters
 7. calculates standard deviations and percentage errors where possible
-8. calculates residuals, chi-square, and reduced chi-square through `fit_metrics.py`
+8. calculates residuals, chi-square, and reduced chi-square through `fitting/fit_metrics.py`
 9. rejects the fit if any fitted parameter has a percentage error above 100 %
 10. saves the result to a circuit-specific CSV
 11. generates fitted Bode, Nyquist, and residual plots if plotting is enabled and the fit passed validation
@@ -787,14 +679,271 @@ error = Fit rejected: parameter uncertainty above 100 % for ...
 
 and are not plotted.
 
-## 12. Fit-quality metrics and residuals
+--- 
 
-The fitter saves:
+## 10. Fit-quality metrics and residuals
 
-```text
-chi_square
-reduced_chi_square
+The fitting workflow evaluates the quality of each equivalent-circuit fit using two complementary approaches:
+
+1. numerical fit-quality metrics, mainly `chi_square` and `reduced_chi_square`;
+2. residual plots, which show how the fitting error is distributed across frequency.
+
+These metrics are useful for comparing fits, but they should not be interpreted as proof that a circuit is physically unique or correct.
+
+### 10.1 Complex impedance and residuals
+
+For each frequency point, the experimental impedance is complex:
+
+$$
+Z_{\mathrm{exp}} = Z_{\mathrm{exp}}' + jZ_{\mathrm{exp}}''
+$$
+
+and the fitted circuit predicts:
+
+$$
+Z_{\mathrm{fit}} = Z_{\mathrm{fit}}' + jZ_{\mathrm{fit}}''
+$$
+
+The residual is the difference between the experimental and fitted impedance:
+
+$$
+r = Z_{\mathrm{exp}} - Z_{\mathrm{fit}}
+$$
+
+
+Because EIS data are complex, the residual contains both a real and an imaginary contribution:
+
+$$
+r(\omega) =
+r'(\omega)
++
+jr''(\omega)
+$$
+
+The `fit_metrics.py` module centralises these calculations. It is responsible for computing:
+
+* complex residuals;
+* relative real residuals;
+* relative imaginary residuals;
+* absolute residuals;
+* `chi_square`;
+* `reduced_chi_square`.
+
+### 10.2 Chi-square
+
+The chi-square value, $\chi^2$, measures the overall discrepancy between the experimental impedance spectrum and the fitted circuit response.
+
+Since impedance values can vary by several orders of magnitude across the frequency range, this project uses a relative chi-square by default. The squared difference between experimental and fitted impedance is normalized by the magnitude of the experimental impedance:
+
+$$
+\chi^2 =
+\sum_{\omega}
+\frac{
+\left|Z_{\mathrm{exp}}(\omega) - Z_{\mathrm{fit}}(\omega)\right|^2
+}{
+\left|Z_{\mathrm{exp}}(\omega)\right|^2
+}
+$$
+
+This normalization prevents high-impedance points from dominating the fit-quality metric.
+
+This is also consistent with the fitting procedure used in `fitting/fitter.py`, where the circuit is fitted using modulus weighting:
+
+```python
+circuit.fit(freq, z, weight_by_modulus=True)
 ```
+
+In practical terms:
+
+* a lower `chi_square` means that the fitted curve is numerically closer to the experimental data;
+* a higher `chi_square` means that the fitted curve deviates more strongly from the experimental data.
+
+However, raw `chi_square` depends on the number of data points and the number of fitted parameters. For this reason, it is mainly useful when comparing fits with the same circuit and the same frequency range.
+
+---
+
+### 10.3 Reduced chi-square
+
+The reduced chi-square, $\chi^2_{\mathrm{red}}$, normalizes $\chi^2$ by the number of degrees of freedom of the fit:
+
+$$
+\chi^2_{\mathrm{red}} =
+\frac{\chi^2}{\nu}
+$$
+
+where $\nu$ is the number of degrees of freedom of the fit.
+
+For complex EIS data, each frequency point contributes two fitted values:
+
+* the real impedance, $Z'$;
+* the imaginary impedance, $Z''$.
+
+Therefore, if there are $N$ valid frequency points and $p$ fitted circuit parameters, the number of degrees of freedom is calculated as:
+
+$$
+\nu = 2N - p
+$$
+
+Thus:
+
+$$
+\chi^2_{\mathrm{red}} =
+\frac{\chi^2}{2N - p}
+$$
+
+The reduced chi-square is more useful than raw chi-square when comparing candidate circuits with different numbers of fitted parameters. A more complex circuit can often reduce raw $\chi^2$ simply because it has more adjustable parameters. Dividing by the degrees of freedom partially accounts for this increase in model complexity.
+
+In the workflow, `reduced_chi_square` is therefore the preferred numerical metric for comparing different circuit fits to the same dataset.
+
+---
+
+### 10.4 Residual plots
+
+While `chi_square` and `reduced_chi_square` give a single numerical estimate of fit quality, residual plots show where and how the model fails across the frequency range.
+
+Residual plots are generated when the following option is set in `global.json`:
+
+```json
+"plot_residuals": true
+```
+
+The residual plots show, across the whole frequency range, the relative deviation between the experimental and fitted impedance (normalized by the magnitude of the experimental impedance).
+
+These values are expressed as percentages, making it easier to compare residuals across frequency ranges with very different impedance magnitudes.
+
+A good residual plot should show points randomly scattered around zero, without a clear frequency-dependent  structure (it would otherwise point out systematic error in the fit).
+
+<p align="center">
+  <img src="./resources/residuals_example.png" height="300">
+</p>
+
+Systematic residual patterns are important warning signs. For example:
+
+| Residual behaviour                              | Possible interpretation                                                                                     |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Random scatter around zero                      | The circuit captures the main impedance response reasonably well.                                           |
+| Wave-like or sinusoidal residuals               | The circuit is missing one or more frequency-dependent processes.                                           |
+| Residuals mostly above or below zero            | The model is biased and systematically over- or underestimates the data.                                    |
+| Large low-frequency residuals                   | Possible missing electrode polarization, diffusion, drift, or slow relaxation.                              |
+| Large high-frequency residuals                  | Possible missing contact resistance, inductive artefact, cable effect, or high-frequency measurement error. |
+| Small residuals but very large parameter errors | The fit may be numerically good but poorly identifiable.                                                    |
+
+---
+
+### 10.5 Displaying fit metrics on plots
+
+The fitted Bode and Nyquist plots can display both `chi_square` and `reduced_chi_square` directly on the figure when the following option is set in `global.json`:
+
+```json
+"display_chi_square": true
+```
+
+This makes it easier to visually compare the fitted spectrum and the numerical fit quality at the same time.
+
+---
+
+### 10.6 How to interpret fit quality
+
+A fit should not be judged from `chi_square` or `reduced_chi_square` alone.
+
+In practice, the fit should be considered reliable only when the following conditions are reasonably satisfied:
+
+* the Nyquist and Bode plots show good visual agreement between experimental and fitted data;
+* `reduced_chi_square` is low compared with other candidate circuits;
+* residuals are randomly distributed around zero;
+* fitted parameters are physically reasonable;
+* fitted parameter uncertainties are acceptable;
+* no covariance warning is reported;
+* the circuit elements have a meaningful physical interpretation;
+* the same circuit gives consistent trends across related samples.
+
+A fit with a low `reduced_chi_square` but structured residuals should be interpreted cautiously. This means the circuit reproduces the overall shape of the impedance spectrum but does not fully capture all frequency-dependent processes.
+
+Similarly, a fit with a low `reduced_chi_square` but very large parameter standard deviations is considered poorly identifiable. In the current workflow, fits are rejected when any fitted parameter has a percentage error greater than 100 %.
+
+Therefore, `chi_square`, `reduced_chi_square`, and residual plots should be used together. The numerical metrics quantify the total fitting error, while the residual plots reveal whether this error is randomly distributed or systematic. The final choice of equivalent circuit should also depend on the physical meaning and stability of the fitted parameters.
+
+
+## 10. Fit-quality metrics and residuals
+
+For each frequency point, the experimental impedance is complex:
+
+$$
+Z_{\mathrm{exp}} = Z_{\mathrm{exp}}' + jZ_{\mathrm{exp}}''
+$$
+
+and the fitted circuit predicts:
+
+$$
+Z_{\mathrm{fit}} = Z_{\mathrm{fit}}' + jZ_{\mathrm{fit}}''
+$$
+
+The residual is the difference between the experimental and fitted impedance:
+
+$$
+r = Z_{\mathrm{exp}} - Z_{\mathrm{fit}}
+$$
+
+Because EIS data are complex, the residual contains both a real and an imaginary contribution.
+
+### 10.1 Chi-square
+
+The $\chi^2$ measures the total squared difference between the experimental spectrum and the fitted spectrum impedance. Since impedance values can vary by several orders of magnitude across the frequency range, the difference between experimental and fitted complex impedance is normalized by the experimental complex impedance as follows : 
+
+$$
+\chi^2 =
+\sum_{\omega}
+\frac{
+\left|Z_{\mathrm{exp}}(\omega) - Z_{\mathrm{fit}}(\omega)\right|^2
+}{
+\left|Z_{\mathrm{exp}}(\omega)\right|^2
+}
+$$
+
+> Note that this is also more coherent with the way the fitting proceeds since in `fitting/fitter.py` the fitting process is *weighted by modulus* : circuit.fit(freq, z, weight_by_modulus=True) 
+
+### 10.2 Reduced chi-square
+
+The reduced chi-square, $\chi^2_{\mathrm{red}}$, normalizes $\chi^2$ by the number of degrees of freedom of the fit **$\nu$**:
+
+$$
+\chi^2_{\mathrm{red}} =
+\frac{\chi^2}{\nu}
+$$
+
+For complex EIS data, each frequency point gives two fitted values: the real impedance $Z'$ and the imaginary impedance $Z''$. Therefore, if there are $N$ valid frequency points and $p$ fitted circuit parameters, the degrees of freedom are calculated as:
+
+$$
+\nu = 2N - p
+$$
+
+Thus:
+
+$$
+\chi^2_{\mathrm{red}} =
+\frac{\chi^2}{2N - p}
+$$
+
+### Purpose of these values
+
+The purpose of `chi_square` is to quantify the total discrepancy between the measured impedance spectrum and the fitted equivalent-circuit response. A lower value generally indicates a closer numerical fit.
+
+The purpose of `reduced_chi_square` is to make this comparison fairer when circuits have different numbers of fitted parameters. A more complex circuit often gives a lower raw chi-square simply because it has more adjustable parameters. By dividing by the degrees of freedom, `reduced_chi_square` partially accounts for model complexity.
+
+Therefore, `reduced_chi_square` is usually more useful than raw `chi_square` when comparing several candidate circuits fitted to the same data.
+
+However, neither value should be used as the only criterion for selecting an equivalent circuit. A circuit can have a low chi-square while still being physically inappropriate or overfitted. For this reason, the project uses chi-square values together with:
+
+* visual agreement in Nyquist and Bode plots;
+* residual plots;
+* parameter uncertainties;
+* covariance warnings;
+* physical meaning of the circuit elements;
+* consistency of fitted trends across samples.
+
+In practice, `chi_square` and `reduced_chi_square` are best understood as quantitative fit-quality indicators, not as proof that a fitted circuit is physically unique or correct.
+
+
 
 The chi-square value quantifies the difference between experimental and fitted impedance values.
 
