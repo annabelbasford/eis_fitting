@@ -6,6 +6,8 @@ __pycache__/
 figures.py
 surfaces.py
 
+./resources/simulated_surfaces
+
 .env
 venv/
 .envs/

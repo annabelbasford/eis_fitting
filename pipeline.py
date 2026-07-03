@@ -78,7 +78,7 @@ class EISPipeline:
 
         # --------------- Pre-plot / manual-cleaning mode --------------- #
 
-        if run_parameters.get("pre_plot", False):
+        if run_parameters.get("pre_plot", False) and not experiment.paths.fits.is_dir():
             PreprocessPlotter().plot_folder(
                 input_folder=experiment.paths.csv,
                 output_folder=experiment.paths.pre_plots,

@@ -1,8 +1,8 @@
 {
     "paths": {
         "data_path": "/home/enzos/data/",
-        "user": "dryshia",
-        "project": "EIS_hydrogels",
+        "user": "enzo",
+        "project": "test",
         "output_mode": "workspace",
         "output_path": "/home/enzos/data_processed"
     },
@@ -11,7 +11,7 @@
         "fit": true,
         "plot": true,
         "plot_residuals": true,
-        "display_chi_square": true,
+        "display_chi_square": false,
         "fitting_frequency_range": null,
         "compute_mean_parameters" : true
     },
