@@ -1,44 +1,45 @@
 {
     "paths": {
         "data_path": "/home/enzos/data/",
-        "user": "enzo",
-        "project": "test",
+        "user": "femke",
+        "project": "article",
         "output_mode": "workspace",
         "output_path": "/home/enzos/data_processed"
     },
     "run": {
         "pre_plot": false,
-        "fit": true,
         "plot": true,
         "plot_residuals": true,
-        "display_chi_square": false,
-        "fitting_frequency_range": null,
-        "compute_mean_parameters" : true
+        "display_chi_square": true,
+        "fitting_frequency_range": [10,null],
+        "compute_mean_parameters" : false
     },
-    "plotting_limits": {
+    "plotting": {
         "R_and_Q": {
             "left_ylim": [
                 1e-1,
                 1e15
             ],
             "right_ylim": [
-                1e-12,
-                1e-2
+                1e-10,
+                1e-1
             ]
         },
         "conductivities": {
             "left_ylim": [
-                1e-10,
-                1e-4
+                0,
+                null
             ],
-            "right_ylim": null
+            "normalize": true,
+            "cmap_name": "Blues",
+            "log_scale":true
         }
     },
     "save_preferences": {
         "transparent": false,
         "png": true,
         "svg": false,
-        "dpi": 250
+        "dpi": 150
     },
     "full_terminal": true
 }

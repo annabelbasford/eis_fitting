@@ -130,7 +130,7 @@ class EISPipeline:
 
                 EISPlotter(
                     self.circuits,
-                    plotting_limits=experiment.plotting_limits,
+                    plotting=experiment.plotting,
                 ).run(
                     experiment=experiment,
                     all_fit_data=all_fit_data,

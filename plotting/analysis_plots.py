@@ -6,9 +6,9 @@ from ..utils import FigureSaver
 
 
 class AnalysisPlotter:
-    def __init__(self, circuits: dict, plotting_limits: dict | None = None):
+    def __init__(self, circuits: dict, plotting: dict | None = None):
         self.circuits = circuits
-        self.plotting_limits = plotting_limits or {}
+        self.plotting = plotting or {}
 
     def run(self, experiment) -> None:
         """
@@ -60,9 +60,9 @@ class AnalysisPlotter:
                 right_columns = capacitance_columns
                 right_axis_label = r"Capacitance ($F$)"
 
-            r_and_q_limits = self.get_limits("R_and_Q")
+            r_and_q_limits = self.plotting.get("R_and_Q",{})
 
-            conductivities_limits = self.get_limits("conductivities")
+            conductivities_limits = self.plotting.get("conductivities", {})
 
             for csv_path in sorted(experiment.paths.csv.glob("*.csv")):
                 sample = csv_path.stem
@@ -75,7 +75,7 @@ class AnalysisPlotter:
 
                 if row.empty or not row.iloc[0]["fit_success"]:
                     continue
-                
+
                 self.plot_parameter_bars(
                     parameters_csv=parameters_csv,
                     circuit_name=circuit_name,
@@ -91,9 +91,10 @@ class AnalysisPlotter:
                     left_ylim=r_and_q_limits.get("left_ylim"),
                     right_ylim=r_and_q_limits.get("right_ylim"),
                     show_alpha=True,
-                    dpi=experiment.save_preferences.get("dpi", 300)
+                    dpi=experiment.save_preferences.get("dpi", 300),
                 )
 
+            conductivities_parameters = experiment.plotting["conductivities"] 
             # One experiment-level R_i conductivity chart
             self.plot_conductivities_summary(
                 parameters_csv=parameters_csv,
@@ -102,8 +103,10 @@ class AnalysisPlotter:
                 save_root=experiment.paths.plots,
                 figure_saver=figure_saver,
                 y_lim=conductivities_limits.get("left_ylim"),
-                cmap_name="viridis",
-                dpi=experiment.save_preferences.get("dpi", 300)
+                cmap_name=conductivities_parameters.get("cmap_name", "viridis"),
+                log_scale=conductivities_parameters.get("log_scale", True),
+                dpi=experiment.save_preferences.get("dpi", 300),
+                normalize=conductivities_parameters.get("normalize", False),
             )
 
     def plot_conductivities_summary(
@@ -115,7 +118,9 @@ class AnalysisPlotter:
         figure_saver,
         y_lim=None,
         cmap_name="viridis",
+        log_scale=True,
         dpi=300,
+        normalize=False,
     ):
         """
         Plot one experiment-level conductivity summary per conductivity type.
@@ -270,6 +275,9 @@ class AnalysisPlotter:
             fig_width = max(8, len(samples) * 0.65)
             fig, ax = plt.subplots(figsize=(fig_width, 5))
 
+            if log_scale:
+                ax.set_yscale("log")
+
             for xpos, conductivity, error, colour in zip(
                 x_values,
                 conductivities,
@@ -303,11 +311,14 @@ class AnalysisPlotter:
                 samples,
                 rotation=45,
                 ha="right",
-                fontsize=11,
+                fontsize=10,
             )
 
+            norm_label = "Normalized " if normalize else ""
             ax.set_ylabel(
-                conductivity_label + r" conductivity ($\mathrm{S.cm^{-1}}$)",
+                norm_label
+                + conductivity_label
+                + r" conductivity ($\mathrm{S.cm^{-1}}$)",
                 fontsize=14,
             )
 
@@ -315,8 +326,7 @@ class AnalysisPlotter:
                 rf"{experiment_name} | {circuit_name} | {conductivity_label} conductivity",
                 fontsize=14,
             )
-
-            ax.set_yscale("log")
+        
             ax.autoscale(axis="y")
             ax.margins(y=0.15)
 
@@ -325,9 +335,11 @@ class AnalysisPlotter:
 
             output_suffix = get_output_suffix(conductivity_col)
 
+            norm_label = "normalized_" if normalize else ""
+
             figure_saver.save(
                 save_path=save_root
-                / f"{experiment_name}_{circuit_name}_{output_suffix}_all_samples",
+                / f"{experiment_name}_{circuit_name}_{norm_label}{output_suffix}_all_samples",
                 fig=fig,
                 axes={ax},
                 dpi=dpi,
@@ -501,9 +513,6 @@ class AnalysisPlotter:
         order = style.get("order", float("inf"))
 
         return order, colour
-
-    def get_limits(self, figure_name: str) -> dict:
-        return self.plotting_limits.get(figure_name, {})
 
     @staticmethod
     def get_element_columns(parameters_csv, first_chars):

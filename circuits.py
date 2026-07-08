@@ -18,6 +18,7 @@ CIRCUITS = {
             "R_2": {
                 "name": "R_e",
                 "colour": "#F37F8C",
+                "compute_conductivity": True,
                 "order": 1,
             },
             "CPE_1_0": {
@@ -86,55 +87,56 @@ CIRCUITS = {
     "circuit_3": {
         "string": "p(R_1,CPE_1)-p(R_2,CPE_2)-CPE_3",
         "guess": [
-            100,  # R_1 = R_grain
-            1e-6,  # CPE_1_0 = Q_grain
-            0.9,  # CPE_1_1 = alpha_grain
-            1000,  # R_2 = R_gb
-            1e-6,  # CPE_2_0 = Q_gb
-            0.8,  # CPE_2_1 = alpha_gb
-            1e-5,  # CPE_3_0 = Q_dl
-            0.9,  # CPE_3_1 = alpha_dl
+            100,  # R_1 = R_cond
+            1e-6,  # CPE_1_0 = Q_cond
+            0.9,  # CPE_1_1 = alpha_cond
+            1000,  # R_2 = R_junction
+            1e-6,  # CPE_2_0 = Q_junction
+            0.8,  # CPE_2_1 = alpha_junction
+            1e-5,  # CPE_3_0 = Q_ep
+            0.9,  # CPE_3_1 = alpha_ep
         ],
         "mapping": {
             "R_1": {
-                "name": "R_grain",
+                "name": "R_cond",
                 "colour": "#80D4F8",
                 "order": 0,
                 "compute_conductivity": True,
             },
             "CPE_1_0": {
-                "name": "Q_grain",
+                "name": "Q_cond",
                 "colour": "#7C84C2",
                 "order": 0,
             },
             "CPE_1_1": {
-                "name": "alpha_grain",
+                "name": "alpha_cond",
                 "colour": "#7C84C2",
                 "order": 0,
             },
             "R_2": {
-                "name": "R_gb",
+                "name": "R_junction",
                 "colour": "#F37F8C",
                 "order": 1,
+                "compute_conductivity": True,
             },
             "CPE_2_0": {
-                "name": "Q_gb",
+                "name": "Q_junction",
                 "colour": "#B39DDB",
                 "order": 1,
             },
             "CPE_2_1": {
-                "name": "alpha_gb",
+                "name": "alpha_junction",
                 "colour": "#B39DDB",
                 "order": 1,
             },
             "CPE_3_0": {
-                "name": "Q_dl",
-                "colour": "#9AD0A3",
+                "name": "Q_ep",
+                "colour": "#9BD3A8",
                 "order": 2,
             },
             "CPE_3_1": {
-                "name": "alpha_dl",
-                "colour": "#9AD0A3",
+                "name": "alpha_ep",
+                "colour": "#9BD3A8",
                 "order": 2,
             },
         },
@@ -188,12 +190,12 @@ CIRCUITS = {
     "ionic_1": {
         "string": "R_1-p(R_2,CPE_1)-CPE_2",
         "guess": [
-            1e3,  # R_1 = R_i
-            1e5,  # R_2 = R_bulk
-            5e-11,  # CPE_1_0 = Q_bulk
-            0.95,  # CPE_1_1 = alpha_bulk
-            1e-7,  # CPE_2_0 = Q_DL
-            0.70,  # CPE_2_1 = alpha_DL
+            1e2,  # R_1 = R_i
+            1e3,  # R_2 = R_bulk
+            1e-4,  # CPE_1_0 = Q_bulk
+            0.5,  # CPE_1_1 = alpha_bulk
+            1e-5,  # CPE_2_0 = Q_DL
+            0.9,  # CPE_2_1 = alpha_DL
         ],
         "mapping": {
             "R_1": {
@@ -206,24 +208,11 @@ CIRCUITS = {
                 "name": "R_bulk",
                 "colour": "#69BC86",
                 "order": 1,
-                "compute_conductivity": True,
             },
-            "CPE_1_0": {
-                "name": "Q_bulk",
-                "colour": "#F49A80",
-                "order": 1},
-            "CPE_1_1": {
-                "name": "alpha_bulk",
-                "colour": "#F49A80",
-                "order": 1},
-            "CPE_2_0": {
-                "name": "Q_DL",
-                "colour": "#7C84C2",
-                "order": 2},
-            "CPE_2_1": {
-                "name": "alpha_DL",
-                "colour": "#7C84C2",
-                "order": 2},
+            "CPE_1_0": {"name": "Q_bulk", "colour": "#F49A80", "order": 1},
+            "CPE_1_1": {"name": "alpha_bulk", "colour": "#F49A80", "order": 1},
+            "CPE_2_0": {"name": "Q_DL", "colour": "#7C84C2", "order": 2},
+            "CPE_2_1": {"name": "alpha_DL", "colour": "#7C84C2", "order": 2},
         },
     },
     "pseudo_randles_DL": {
@@ -407,6 +396,235 @@ CIRCUITS = {
                 "name": "alpha_HF",
                 "colour": "#69BC86",
                 "order": 2,
+            },
+        },
+    },
+    "series_R_CPE": {
+        "string": "R_1-CPE_1",
+        "guess": [
+            1e3,  # R_1 = R_i / transport resistance
+            1e-6,  # CPE_1_0 = Q
+            0.8,  # CPE_1_1 = alpha
+        ],
+        "mapping": {
+            "R_1": {
+                "name": "R_total",
+                "colour": "#80D4F8",
+                "order": 0,
+                "compute_conductivity": True,
+            },
+            "CPE_1_0": {
+                "name": "Q_total",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+            "CPE_1_1": {
+                "name": "alpha_total",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+        },
+    },
+    "mixed_1": {
+        "string": "R_1-p(R_2,R_3-CPE_1)",
+        "guess": [
+            50,  # R_1 = R_c
+            1e4,  # R_2 = R_e
+            1e3,  # R_3 = R_ion
+            1e-4,  # CPE_1_0 = Q_EP
+            0.5,  # CPE_1_1 = alpha_EP
+        ],
+        "mapping": {
+            "R_1": {
+                "name": "R_c",
+                "colour": "#69BC86",
+                "order": 0,
+                "compute_conductivity": False,
+            },
+            "R_2": {
+                "name": "R_e",
+                "colour": "#F37F8C",
+                "order": 1,
+                "compute_conductivity": True,
+            },
+            "R_3": {
+                "name": "R_ion",
+                "colour": "#80D4F8",
+                "order": 2,
+                "compute_conductivity": True,
+            },
+            "CPE_1_0": {
+                "name": "Q_EP",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+            "CPE_1_1": {
+                "name": "alpha_EP",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+        },
+    },
+    "mixed_junction_1": {
+        "string": "R_1-p(R_2,R_3-p(R_4,CPE_1)-CPE_2)",
+        "guess": [
+            50,  # R_1 = R_c
+            1e4,  # R_2 = R_e
+            200,  # R_3 = R_ion
+            1e3,  # R_4 = R_junction
+            1e-6,  # CPE_1_0 = Q_junction
+            0.6,  # CPE_1_1 = alpha_junction
+            1e-4,  # CPE_2_0 = Q_EP
+            0.35,  # CPE_2_1 = alpha_EP
+        ],
+        "mapping": {
+            "R_1": {
+                "name": "R_c",
+                "colour": "#69BC86",
+                "order": 0,
+                "compute_conductivity": False,
+            },
+            "R_2": {
+                "name": "R_e",
+                "colour": "#F37F8C",
+                "order": 1,
+                "compute_conductivity": True,
+            },
+            "R_3": {
+                "name": "R_ion",
+                "colour": "#80D4F8",
+                "order": 2,
+                "compute_conductivity": True,
+            },
+            "R_4": {
+                "name": "R_junction",
+                "colour": "#B39DDB",
+                "order": 3,
+                "compute_conductivity": True,
+            },
+            "CPE_1_0": {
+                "name": "Q_junction",
+                "colour": "#B39DDB",
+                "order": 0,
+            },
+            "CPE_1_1": {
+                "name": "alpha_junction",
+                "colour": "#B39DDB",
+                "order": 0,
+            },
+            "CPE_2_0": {
+                "name": "Q_EP",
+                "colour": "#7C84C2",
+                "order": 1,
+            },
+            "CPE_2_1": {
+                "name": "alpha_EP",
+                "colour": "#7C84C2",
+                "order": 1,
+            },
+        },
+    },
+    "mixed_shunt_hf_1": {
+        "string": "p(R_1-p(R_2,R_3-CPE_1),CPE_2)",
+        "guess": [
+            50,  # R_1 = R_c
+            1e4,  # R_2 = R_e
+            1e3,  # R_3 = R_ion
+            1e-4,  # CPE_1_0 = Q_EP
+            0.5,  # CPE_1_1 = alpha_EP
+            1e-10,  # CPE_2_0 = Q_HF
+            0.95,  # CPE_2_1 = alpha_HF
+        ],
+        "mapping": {
+            "R_1": {
+                "name": "R_c",
+                "colour": "#69BC86",
+                "order": 0,
+                "compute_conductivity": False,
+            },
+            "R_2": {
+                "name": "R_e",
+                "colour": "#F37F8C",
+                "order": 1,
+                "compute_conductivity": True,
+            },
+            "R_3": {
+                "name": "R_ion",
+                "colour": "#80D4F8",
+                "order": 2,
+                "compute_conductivity": True,
+            },
+            "CPE_1_0": {
+                "name": "Q_EP",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+            "CPE_1_1": {
+                "name": "alpha_EP",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+            "CPE_2_0": {
+                "name": "Q_HF",
+                "colour": "#9BD3A8",
+                "order": 1,
+            },
+            "CPE_2_1": {
+                "name": "alpha_HF",
+                "colour": "#9BD3A8",
+                "order": 1,
+            },
+        },
+    },
+    "dual_ion_pathway_1": {
+        "string": "R_1-p(R_2-CPE_1,R_3-CPE_2)",
+        "guess": [
+            50,  # R_1 = R_c
+            500,  # R_2 = R_free
+            1e-4,  # CPE_1_0 = Q_free
+            0.6,  # CPE_1_1 = alpha_free
+            2e3,  # R_3 = R_bound
+            1e-6,  # CPE_2_0 = Q_bound
+            0.6,  # CPE_2_1 = alpha_bound
+        ],
+        "mapping": {
+            "R_1": {
+                "name": "R_c",
+                "colour": "#69BC86",
+                "order": 0,
+                "compute_conductivity": False,
+            },
+            "R_2": {
+                "name": "R_free",
+                "colour": "#80D4F8",
+                "order": 1,
+                "compute_conductivity": True,
+            },
+            "CPE_1_0": {
+                "name": "Q_free",
+                "colour": "#80D4F8",
+                "order": 0,
+            },
+            "CPE_1_1": {
+                "name": "alpha_free",
+                "colour": "#80D4F8",
+                "order": 0,
+            },
+            "R_3": {
+                "name": "R_bound",
+                "colour": "#F37F8C",
+                "order": 2,
+                "compute_conductivity": True,
+            },
+            "CPE_2_0": {
+                "name": "Q_bound",
+                "colour": "#F37F8C",
+                "order": 1,
+            },
+            "CPE_2_1": {
+                "name": "alpha_bound",
+                "colour": "#F37F8C",
+                "order": 1,
             },
         },
     },

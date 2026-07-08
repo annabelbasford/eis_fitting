@@ -71,5 +71,5 @@ class Experiment:
 
         self.geometry = config["geometry"]
         self.run = config["run"]
-        self.plotting_limits = config.get("plotting_limits", {})
+        self.plotting = config.get("plotting", {})
         self.save_preferences = config["save_preferences"]

@@ -20,6 +20,7 @@ class EISAnalyser:
                 parameters_csv=parameters_csv,
                 circuit_name=circuit_name,
                 geometry=experiment.geometry,
+                normalize=experiment.plotting["conductivities"].get("normalize", False),
             )
 
             if experiment.run.get("compute_mean_parameters", False):
@@ -35,7 +36,9 @@ class EISAnalyser:
                     float_format="%.10e",
                 )
 
-    def add_conductivity_columns(self, parameters_csv, circuit_name, geometry):
+    def add_conductivity_columns(
+        self, parameters_csv, circuit_name, geometry, normalize
+    ):
         df = pd.read_csv(parameters_csv)
 
         thickness_cm = geometry["thickness_cm"]
@@ -61,14 +64,28 @@ class EISAnalyser:
             if sd_col not in df.columns:
                 print(f"\nSkipping conductivity for {resistance_name}: no {sd_col}")
                 continue
+            
+            conductivity = None
+            sd_conductivity = None
 
-            conductivity = thickness_cm / (df[resistance_name] * area_cm2)
+            if not normalize:
+                conductivity = thickness_cm / (df[resistance_name] * area_cm2)
 
-            sd_conductivity = conductivity * np.sqrt(
-                (sd_thickness_cm / thickness_cm) ** 2
-                + (sd_area_cm2 / area_cm2) ** 2
-                + (df[sd_col] / df[resistance_name]) ** 2
-            )
+                sd_conductivity = conductivity * np.sqrt(
+                    (sd_thickness_cm / thickness_cm) ** 2
+                    + (sd_area_cm2 / area_cm2) ** 2
+                    + (df[sd_col] / df[resistance_name]) ** 2
+                )
+            else : 
+                conductivity = 1 / (df[resistance_name])
+                min_conductivity = conductivity.min()
+                conductivity = conductivity / min_conductivity
+
+                # propagated uncertainty for normalized conductivity
+                sd_conductivity = df[sd_col]/df[resistance_name]**2
+
+                
+
 
             df[f"conductivity_S_cm_{resistance_name}"] = conductivity
             df[f"SD_conductivity_S_cm_{resistance_name}"] = sd_conductivity
@@ -90,7 +107,9 @@ class EISAnalyser:
             SD is the sample standard deviation across successful fits.
         """
 
-        has_mean_row = (df["sample"].astype(str).str.strip().str.upper() == "MEAN").any()
+        has_mean_row = (
+            df["sample"].astype(str).str.strip().str.upper() == "MEAN"
+        ).any()
 
         if "fit_success" not in df.columns or has_mean_row:
             return df

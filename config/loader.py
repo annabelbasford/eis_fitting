@@ -129,7 +129,7 @@ class ConfigLoader:
             # Global execution parameters
             "run": self.global_config.get("run", {}),
             "save_preferences": self.global_config.get("save_preferences", {}),
-            "plotting_limits": self.global_config.get("plotting_limits", {}),
+            "plotting": self.global_config.get("plotting", {}),
 
             # Keep original blocks available if needed
             "metadata": metadata,

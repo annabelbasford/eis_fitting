@@ -7,9 +7,9 @@ from ..utils import FigureSaver
 
 
 class EISPlotter:
-    def __init__(self, circuits: dict, plotting_limits: dict | None = None):
+    def __init__(self, circuits: dict, plotting: dict | None = None):
         self.circuits = circuits
-        self.plotting_limits = plotting_limits or {}
+        self.plotting = plotting or {}
 
     """
     High-level plotting orchestrator.
@@ -186,7 +186,7 @@ class EISPlotter:
     def plot_analysis_results(self, experiment) -> None:
         analysis_plotter = AnalysisPlotter(
             circuits=self.circuits,
-            plotting_limits=self.plotting_limits,
+            plotting=self.plotting,
         )
 
         analysis_plotter.run(

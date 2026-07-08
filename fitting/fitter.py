@@ -35,7 +35,7 @@ class EISFitter:
 
         fitting_frequency_range = self._get_fitting_frequency_range(experiment)
 
-        if full_terminal and fitting_frequency_range is not None:
+        if full_terminal and fitting_frequency_range is not [None, None]:
             print(
                 f"\nUsing fitting frequency range: "
                 f"{fitting_frequency_range[0]} Hz to {fitting_frequency_range[1]} Hz"

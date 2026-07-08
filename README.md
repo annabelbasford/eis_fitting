@@ -274,37 +274,38 @@ Example:
 {
     "paths": {
         "data_path": "/home/enzos/data/",
-        "user": "enzo",
-        "project": "test",
+        "user": "femke",
+        "project": "article",
         "output_mode": "workspace",
         "output_path": "/home/enzos/data_processed"
     },
     "run": {
         "pre_plot": false,
-        "fit": true,
         "plot": true,
         "plot_residuals": true,
         "display_chi_square": true,
-        "fitting_frequency_range": null,
-        "compute_mean_parameters" : true
+        "fitting_frequency_range": [10,null],
+        "compute_mean_parameters" : false
     },
-    "plotting_limits": {
+    "plotting": {
         "R_and_Q": {
             "left_ylim": [
                 1e-1,
                 1e15
             ],
             "right_ylim": [
-                1e-12,
-                1e-2
+                1e-10,
+                1e-1
             ]
         },
         "conductivities": {
             "left_ylim": [
-                1e-10,
-                1e-4
+                0,
+                10
             ],
-            "right_ylim": null
+            "normalize": true,
+            "cmap_name": "Blues",
+            "log_scale": false
         }
     },
     "save_preferences": {
@@ -340,16 +341,7 @@ Example:
 | `run.fitting_frequency_range` | Frequency window used for fitting, in Hz. Use `null` to fit the full spectrum, or `[f_min, f_max]` to restrict the fit. One-sided ranges such as `[1, null]` or `[null, 100000]` are also supported |
 | `run.compute_mean_parameters` | If `true`, appends one `MEAN` row to each circuit parameter CSV. The mean is computed over successful fits only. Parameter uncertainties are propagated from individual fitted standard deviations using $u(\bar{x}) = \sqrt{\sum_i u_i^2}/n$. Since $\chi^2$ and $\chi^2_{\mathrm{red}}$ do not have individual fitted uncertainties, their uncertainty is estimated from the sample-to-sample standard deviation across successful fits. |
 
-#### `save_preferences`
-
-| Field | Meaning |
-|---|---|
-| `save_preferences.transparent` | If `true`, figures are saved with a transparent background |
-| `save_preferences.png` | If `true`, figures are saved as PNG files |
-| `save_preferences.svg` | If `true`, figures are saved as SVG files |
-| `save_preferences.dpi` | Resolution used when saving raster figures such as PNG. Defaults to `300` if not specified. Lower values speed up plotting and reduce file size; higher values are useful for publication-quality figures |
-
-#### `plotting_limits`
+#### `plotting`
 
 Manual y-axis limits for analysis plots. Each entry corresponds to a figure type.
 
@@ -362,7 +354,16 @@ Example:
 }
 ```
 
-Use `null` to keep automatic Matplotlib scaling.
+Use `null` option in json to keep automatic Matplotlib scaling.
+
+#### `save_preferences`
+
+| Field | Meaning |
+|---|---|
+| `save_preferences.transparent` | If `true`, figures are saved with a transparent background |
+| `save_preferences.png` | If `true`, figures are saved as PNG files |
+| `save_preferences.svg` | If `true`, figures are saved as SVG files |
+| `save_preferences.dpi` | Resolution used when saving raster figures such as PNG. Defaults to `300` if not specified. Lower values speed up plotting and reduce file size; higher values are useful for publication-quality figures |
 
 #### `full_terminal`
 
@@ -1211,7 +1212,7 @@ Chi-square display on fit plots is controlled by:
 
 If disabled, chi-square and reduced chi-square are still calculated and stored in the CSV, but they are not written directly on the figures.
 
-### 14.4 Conductivity colour gradient
+### 14.4 Conductivity colour gradient (in analysis_plots.py)
 
 The conductivity summary plots can use a Matplotlib colormap.
 
@@ -1220,11 +1221,12 @@ Examples:
 ```python
 cmap_name = "viridis"
 cmap_name = "Blues"
-cmap_name = "plasma"
+cmap_name = "Greys"
 cmap_name = "magma"
 cmap_name = "cividis"
 ```
 
+> see `https://matplotlib.org/stable/gallery/color/colormap_reference.html` for the list of available colour maps. To reverse the pattern, write `<cmap_name>_r`
 ---
 
 ## 15. Fit warnings and failure handling
@@ -1245,11 +1247,10 @@ SD_<parameter>
 
 A fit may be marked as failed if:
 
-- the optimizer fails
+- the complex, non linear, least squares method does not converge
 - fitted parameters are not finite
 - covariance or standard errors are unavailable
 - one or more fitted parameter percentage errors exceed 100 %
-- the fitted result contains unphysical values
 - the circuit prediction fails
 - the fit raises an exception
 
