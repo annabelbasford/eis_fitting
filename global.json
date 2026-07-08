@@ -27,19 +27,19 @@
         },
         "conductivities": {
             "left_ylim": [
-                0,
+                null,
                 null
             ],
             "normalize": true,
             "cmap_name": "Blues",
-            "log_scale":true
+            "log_scale":false
         }
     },
     "save_preferences": {
-        "transparent": false,
+        "transparent": true,
         "png": true,
         "svg": false,
-        "dpi": 150
+        "dpi": 250
     },
     "full_terminal": true
 }

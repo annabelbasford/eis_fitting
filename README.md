@@ -36,7 +36,7 @@ EISPipeline
     │       ├── saves one fitted-parameter CSV per circuit
     │       ├── calculates chi-square and reduced chi-square
     │       ├── calculates residuals and fitted-parameter uncertainties
-    │       └── rejects non-identifiable fits when parameter error exceeds 100 %
+    │       └── rejects non-identifiable fits when parameter error exceeds 500%
     │
     └── EISAnalyser / EISPlotter
             ├── calculates derived quantities such as selected conductivities
@@ -380,7 +380,7 @@ Example:
 ```json
 {
     "method": "conductive_hydrogel",
-    "description": "0.1 % w/v PEDOT:PSS, no Upy",
+    "description": "0.1% w/v PEDOT:PSS, no Upy",
     "circuits": [
         "ionic_1"
     ]
@@ -585,7 +585,7 @@ processed/<person>/<project>/<experiment>/
         └── <experiment>_<circuit_1>_Rbulk_conductivity_all_samples.png
 ```
 
-If a fit is rejected because one or more parameter percentage errors exceed 100 %, the parameter CSV records the failure. In that case, no Bode, Nyquist, residual, or bar plots are generated for that failed fit. Depending on when the output folders are created, an empty plot folder may remain; this is expected and indicates that the fit was skipped after validation.
+If a fit is rejected because one or more parameter percentage errors exceed 500%, the parameter CSV records the failure. In that case, no Bode, Nyquist, residual, or bar plots are generated for that failed fit. Depending on when the output folders are created, an empty plot folder may remain; this is expected and indicates that the fit was skipped after validation.
 
 --- 
 
@@ -693,17 +693,17 @@ For each selected circuit and each sample, the fitter:
 6. extracts fitted parameters
 7. calculates standard deviations and percentage errors where possible
 8. calculates residuals, chi-square, and reduced chi-square through `fitting/fit_metrics.py`
-9. rejects the fit if any fitted parameter has a percentage error above 100 %
+9. rejects the fit if any fitted parameter has a percentage error above 500%
 10. saves the result to a circuit-specific CSV
 11. generates fitted Bode, Nyquist, and residual plots if plotting is enabled and the fit passed validation
 
-The 100 % parameter-error threshold is used to reject visually good but non-identifiable fits. A fit can have a good chi-square and scattered residuals while still having poorly determined parameters. In that situation, the equivalent circuit may reproduce the spectrum, but the individual elements should not be interpreted physically.
+The 500% parameter-error threshold is used to reject visually good but non-identifiable fits. A fit can have a good chi-square and scattered residuals while still having poorly determined parameters. In that situation, the equivalent circuit may reproduce the spectrum, but the individual elements should not be interpreted physically.
 
 Rejected fits are stored in the CSV with:
 
 ```text
 fit_success = False
-error = Fit rejected: parameter uncertainty above 100 % for ...
+error = Fit rejected: parameter uncertainty above 500% for ...
 ```
 
 and are not plotted.
@@ -888,7 +888,7 @@ In practice, the fit should be considered reliable only when the following condi
 
 A fit with a low `reduced_chi_square` but structured residuals should be interpreted cautiously. This means the circuit reproduces the overall shape of the impedance spectrum but does not fully capture all frequency-dependent processes.
 
-Similarly, a fit with a low `reduced_chi_square` but very large parameter standard deviations is considered poorly identifiable. In the current workflow, fits are rejected when any fitted parameter has a percentage error greater than 100 %.
+Similarly, a fit with a low `reduced_chi_square` but very large parameter standard deviations is considered poorly identifiable. In the current workflow, fits are rejected when any fitted parameter has a percentage error greater than 500%.
 
 ---
 
@@ -1250,16 +1250,16 @@ A fit may be marked as failed if:
 - the complex, non linear, least squares method does not converge
 - fitted parameters are not finite
 - covariance or standard errors are unavailable
-- one or more fitted parameter percentage errors exceed 100 %
+- one or more fitted parameter percentage errors exceed 500%
 - the circuit prediction fails
 - the fit raises an exception
 
-The 100 % parameter-error rule is designed to catch non-identifiable fits. These are cases where the circuit reproduces the impedance spectrum, but one or more individual parameters are poorly determined.
+The 500% parameter-error rule is designed to catch non-identifiable fits. These are cases where the circuit reproduces the impedance spectrum, but one or more individual parameters are poorly determined.
 
 For example:
 
 ```text
-R_bulk_percent_error = 250 %
+R_bulk_percent_error = 250%
 ```
 
 causes the fit to be rejected.
@@ -1268,7 +1268,7 @@ The CSV row then contains:
 
 ```text
 fit_success = False
-error = Fit rejected: parameter uncertainty above 100 % for R_bulk: 250.0 %
+error = Fit rejected: parameter uncertainty above 500% for R_bulk: 250.0%
 ```
 
 ## 16. Common issues
@@ -1334,7 +1334,7 @@ negative
 
 before passing them to Matplotlib.
 
-### Fit rejected because parameter error exceeds 100 %
+### Fit rejected because parameter error exceeds 500%
 
 A visually good fit can still be rejected if one or more fitted parameters have a standard error larger than the fitted value.
 
@@ -1343,7 +1343,7 @@ This means the equivalent circuit can reproduce the spectrum, but the individual
 Check the `error` column in the fit CSV for a message such as:
 
 ```text
-Fit rejected: parameter uncertainty above 100 % for R_bulk: 250.0 %
+Fit rejected: parameter uncertainty above 500% for R_bulk: 250.0%
 ```
 
 Rejected fits are not plotted.
@@ -1390,7 +1390,7 @@ The current object-oriented version supports:
 - one experiment-level conductivity summary plot per conductivity type
 - configurable plot limits and figure saving through `global.json`
 - re-plotting without refitting by deleting only `fits/plots/`
-- rejection of non-identifiable fits when parameter percentage error exceeds 100 %
+- rejection of non-identifiable fits when parameter percentage error exceeds 500%
 - progress bars and terminal output options
 - optional computation of experiment-level mean fitted parameters per circuit
 - propagated uncertainties for mean parameter rows

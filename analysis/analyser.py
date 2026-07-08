@@ -46,7 +46,12 @@ class EISAnalyser:
         area_cm2 = geometry["area_cm2"]
         sd_area_cm2 = geometry["SD_area_cm2"]
 
-        mapping = self.circuits[circuit_name]["mapping"]
+        mapping = self.circuits.get(circuit_name, None)
+
+        if mapping is None :
+            return None
+        
+        mapping = mapping["mapping"]
 
         resistance_names = []
 

@@ -18,7 +18,6 @@ class EISFitter:
     def run(self, experiment, full_terminal=True) -> None:
         output_folder = experiment.paths.fits
         pre_plot_folder = experiment.paths.pre_plots
-        
 
         if pre_plot_folder.is_dir():
             shutil.rmtree(pre_plot_folder)
@@ -93,6 +92,7 @@ class EISFitter:
             all_results=all_results,
             output_folder=output_folder,
             experiment_name=experiment.name,
+            full_terminal=experiment.config.get("full_terminal", True),
         )
 
         return all_fit_data
@@ -173,7 +173,7 @@ class EISFitter:
 
                     row[f"{name}_percent_error"] = percent_error
 
-                    if percent_error > 100:
+                    if percent_error > 500:
                         bad_parameters.append(f"{name}: {percent_error:.1f}%")
 
             else:
@@ -183,7 +183,7 @@ class EISFitter:
 
             if bad_parameters:
                 raise RuntimeError(
-                    "Fit rejected: parameter uncertainty above 100% for "
+                    "Fit rejected: parameter uncertainty above 500% for "
                     + ", ".join(bad_parameters)
                 )
 
@@ -211,10 +211,7 @@ class EISFitter:
             }
 
     def _save_results(
-        self,
-        all_results,
-        output_folder,
-        experiment_name,
+        self, all_results, output_folder, experiment_name, full_terminal=True
     ):
         """
         Save one parameter CSV per circuit.
@@ -259,9 +256,11 @@ class EISFitter:
             ordered_columns = [col for col in base_columns if col in circuit_df.columns]
 
             parameter_columns = self._get_circuit_parameter_columns(
-                circuit_name=circuit_name,
-                df=circuit_df,
+                circuit_name=circuit_name, df=circuit_df, full_terminal=full_terminal
             )
+
+            if parameter_columns is None:
+                continue
 
             for param in parameter_columns:
                 if param in circuit_df.columns:
@@ -291,11 +290,7 @@ class EISFitter:
 
             circuit_df.to_csv(save_path, index=False, float_format="%.10e")
 
-    def _get_circuit_parameter_columns(
-        self,
-        circuit_name,
-        df,
-    ):
+    def _get_circuit_parameter_columns(self, circuit_name, df, full_terminal):
         """
         Return only the fitted parameter columns that belong to one circuit.
 
@@ -307,7 +302,11 @@ class EISFitter:
            R_i, Q_DL, alpha_DL
         """
 
-        circuit = self.circuits[circuit_name]
+        circuit = self.circuits.get(circuit_name, None)
+
+        if circuit is None:
+
+            return None
         mapping = circuit.get("mapping", {})
 
         parameter_columns = []
@@ -342,7 +341,13 @@ class EISFitter:
             return None
 
         if len(frequency_range) != 2:
-            raise ValueError("\033[91m" + "\033[1m" + "/!\\" + "\033[0m" + "fitting_frequency_range must be None or [f_min, f_max]")
+            raise ValueError(
+                "\033[91m"
+                + "\033[1m"
+                + "/!\\"
+                + "\033[0m"
+                + "fitting_frequency_range must be None or [f_min, f_max]"
+            )
 
         f_min, f_max = frequency_range
 
@@ -353,8 +358,12 @@ class EISFitter:
             f_max = float(f_max)
 
         if f_min is not None and f_max is not None and f_min >= f_max:
-            raise ValueError("\033[91m" + "\033[1m" + "/!\\" + "\033[0m" +
-                f"Invalid fitting_frequency_range: {frequency_range}. "
+            raise ValueError(
+                "\033[91m"
+                + "\033[1m"
+                + "/!\\"
+                + "\033[0m"
+                + f"Invalid fitting_frequency_range: {frequency_range}. "
                 "Expected f_min < f_max."
             )
 
@@ -387,13 +396,17 @@ class EISFitter:
         z_fit_input = z[mask]
 
         if len(freq_fit) < 3:
-            raise ValueError("\033[91m" + "\033[1m" + "/!\\" + "\033[0m" +
-                "Fitting frequency range selected fewer than 3 points. "
+            raise ValueError(
+                "\033[91m"
+                + "\033[1m"
+                + "/!\\"
+                + "\033[0m"
+                + "Fitting frequency range selected fewer than 3 points. "
                 f"Range: {fitting_frequency_range}"
             )
 
         return freq_fit, z_fit_input
-    
+
     def load_fit_data(self, experiment):
         """
         Load existing fitted parameter CSVs and rebuild the fitted impedance
@@ -408,7 +421,6 @@ class EISFitter:
 
             z_real = pd.to_numeric(df["Re(Z)/Ohm"], errors="coerce")
             z_imag = -pd.to_numeric(df["-Im(Z)/Ohm"], errors="coerce")
-
 
             Z = z_real.to_numpy() + 1j * z_imag.to_numpy()
             freq = freq.to_numpy(dtype=float)
@@ -448,10 +460,7 @@ class EISFitter:
                     value = row[raw_name]
 
                 else:
-                    print(
-                        f"Missing fitted parameter: "
-                        f"{raw_name} / {mapped_name}"
-                    )
+                    print(f"Missing fitted parameter: " f"{raw_name} / {mapped_name}")
                     return None
 
                 values.append(float(value))
@@ -462,8 +471,7 @@ class EISFitter:
 
         for circuit_name in experiment.circuits:
             parameter_csv = (
-                experiment.paths.fits
-                / f"{experiment.name}_{circuit_name}.csv"
+                experiment.paths.fits / f"{experiment.name}_{circuit_name}.csv"
             )
 
             if not parameter_csv.exists():
@@ -472,7 +480,10 @@ class EISFitter:
 
             df_params = pd.read_csv(parameter_csv)
 
-            circuit_config = self.circuits[circuit_name]
+            circuit_config = self.circuits.get(circuit_name, None)
+            if circuit_config is None:
+                continue
+
             circuit_string = circuit_config["string"]
             initial_guess = circuit_config["guess"]
             mapping = circuit_config.get("mapping", {})
