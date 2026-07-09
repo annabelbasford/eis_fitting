@@ -66,10 +66,12 @@ class Experiment:
         self.name = path.name
         self.description = config.get("description", "")
 
-        self.method = config["method"]
-        self.circuits = config["circuits"]
+        self.method = config.get("method",{})
+        self.circuits = config.get("circuits",{})
 
-        self.geometry = config["geometry"]
-        self.run = config["run"]
+        self.geometry = config.get("geometry", {})
+        self.run = config.get("run",{})
+        self.outlier_removal = config.get("outlier_removal", {})
+        self.validation = config.get("validation",{})
         self.plotting = config.get("plotting", {})
-        self.save_preferences = config["save_preferences"]
+        self.save_preferences = config.get("save_preferences",{})

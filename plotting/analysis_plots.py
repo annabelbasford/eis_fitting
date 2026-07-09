@@ -309,9 +309,9 @@ class AnalysisPlotter:
             ax.set_xticks(x_values)
             ax.set_xticklabels(
                 samples,
-                rotation=45,
-                ha="right",
-                fontsize=10,
+                rotation=0,
+                ha="center",
+                fontsize=14,
             )
 
             norm_label = "Normalized " if normalize else ""

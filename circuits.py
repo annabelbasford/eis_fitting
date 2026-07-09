@@ -104,12 +104,12 @@ CIRCUITS = {
                 "compute_conductivity": True,
             },
             "CPE_1_0": {
-                "name": "Q_cond",
+                "name": "Q_1",
                 "colour": "#7C84C2",
                 "order": 0,
             },
             "CPE_1_1": {
-                "name": "alpha_cond",
+                "name": "alpha_1",
                 "colour": "#7C84C2",
                 "order": 0,
             },
@@ -120,12 +120,12 @@ CIRCUITS = {
                 "compute_conductivity": True,
             },
             "CPE_2_0": {
-                "name": "Q_junction",
+                "name": "Q_2",
                 "colour": "#B39DDB",
                 "order": 1,
             },
             "CPE_2_1": {
-                "name": "alpha_junction",
+                "name": "alpha_2",
                 "colour": "#B39DDB",
                 "order": 1,
             },

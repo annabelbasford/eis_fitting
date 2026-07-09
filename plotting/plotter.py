@@ -68,6 +68,10 @@ class EISPlotter:
     def plot_fit_results(
         self, experiment, all_fit_data, display_chi_square, plot_residuals
     ) -> None:
+        dpi = experiment.save_preferences.get("dpi", 300)
+        validation_parameters = experiment.validation
+        plot_residuals = validation_parameters.get("plot_residuals", True)
+        display_chi_square = validation_parameters.get("display_chi_square", True)
 
         if not all_fit_data:
             print("No fit data available for plotting.")
@@ -81,6 +85,7 @@ class EISPlotter:
 
         plot_root = experiment.paths.plots
         plot_root.mkdir(parents=True, exist_ok=True)
+        
 
         for circuit_name, fit_data_dict in all_fit_data.items():
             if not fit_data_dict:
@@ -123,7 +128,7 @@ class EISPlotter:
                     ),
                     chi_square=chi_square,
                     reduced_chi_square=reduced_chi_square,
-                    dpi=experiment.save_preferences.get("dpi", 300),
+                    dpi=dpi,
                 )
 
                 fit_plotter.plot_bode(
@@ -136,8 +141,25 @@ class EISPlotter:
                     ),
                     chi_square=chi_square,
                     reduced_chi_square=reduced_chi_square,
-                    dpi=experiment.save_preferences.get("dpi", 300),
+                    dpi=dpi,
                 )
+            
+                lin_kk_config = validation_parameters.get("lin_kk", {})
+
+
+                if lin_kk_config.get("plot", False):
+                    lin_kk_save_folder = (
+                            experiment.paths.plots
+                            / sample_name
+                            / "lin_KK_validation"
+                        )
+                    fit_plotter.plot_lin_kk(
+                            sample=sample_name,
+                            lin_kk_result=data.get("lin_kk"),
+                            save_folder=lin_kk_save_folder,
+                            dpi=dpi
+                        )
+
 
                 if plot_residuals:
                     fit_plotter.plot_residuals(
@@ -154,6 +176,7 @@ class EISPlotter:
                         reduced_chi_square=reduced_chi_square,
                         dpi=experiment.save_preferences.get("dpi", 300),
                     )
+
 
         self.plot_all_runs(
             experiment=experiment,

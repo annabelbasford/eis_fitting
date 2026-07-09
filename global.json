@@ -1,18 +1,41 @@
 {
     "paths": {
         "data_path": "/home/enzos/data/",
-        "user": "femke",
-        "project": "article",
+        "user": "enzo",
+        "project": "test",
         "output_mode": "workspace",
         "output_path": "/home/enzos/data_processed"
     },
     "run": {
         "pre_plot": false,
         "plot": true,
-        "plot_residuals": true,
+        "compute_mean_parameters": false
+    },
+    "outlier_removal": {
+        "enabled": true,
+        "threshold": 1.5,
+        "features": [
+            "log_modulus",
+            "phase"
+        ]
+    },
+    "validation": {
         "display_chi_square": true,
-        "fitting_frequency_range": [10,null],
-        "compute_mean_parameters" : false
+        "fitting_frequency_range": [
+            10,
+            1e6
+        ],
+        "plot_residuals": true,
+        "lin_kk": {
+            "enabled": true,
+            "plot": true,
+            "reject_on_fail": true,
+            "c": 0.85,
+            "max_M": 50,
+            "fit_type": "complex",
+            "add_cap": true
+        },
+        "error_percent_param_threshold" : 500
     },
     "plotting": {
         "R_and_Q": {
@@ -31,12 +54,12 @@
                 null
             ],
             "normalize": true,
-            "cmap_name": "Blues",
-            "log_scale":false
+            "cmap_name": "viridis",
+            "log_scale": false
         }
     },
     "save_preferences": {
-        "transparent": true,
+        "transparent": false,
         "png": true,
         "svg": false,
         "dpi": 250

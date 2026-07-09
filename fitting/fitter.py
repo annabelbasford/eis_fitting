@@ -8,6 +8,7 @@ import warnings
 
 from ..io import EISCSVReader
 from .fit_metrics import FitMetrics
+from .lin_kk_validation import LinKKValidator
 
 
 class EISFitter:
@@ -32,7 +33,9 @@ class EISFitter:
             if name in self.circuits
         }
 
-        fitting_frequency_range = self._get_fitting_frequency_range(experiment)
+        fitting_frequency_range = experiment.validation.get(
+            "fitting_frequency_range", [None, None]
+        )
 
         if full_terminal and fitting_frequency_range is not [None, None]:
             print(
@@ -51,6 +54,18 @@ class EISFitter:
                 print(f"\nFitting: {sample_name}")
 
             freq, z = self.reader.read_impedance(csv_path)
+
+            n_points_before_outlier_removal = len(freq)
+
+            freq, z = self._remove_quantile_outliers(
+                freq=freq,
+                z=z,
+                outlier_config=experiment.outlier_removal,
+                sample_name=sample_name,
+                full_terminal=full_terminal,
+            )
+
+            n_points_after_outlier_removal = len(freq)
 
             try:
                 freq, z = self._apply_fitting_frequency_range(
@@ -76,7 +91,9 @@ class EISFitter:
                     circuit_info=circuit_info,
                     freq=freq,
                     z=z,
+                    validation_parameters=experiment.validation,
                     full_terminal=full_terminal,
+                    n_outliers_removed=n_points_before_outlier_removal-n_points_after_outlier_removal
                 )
 
                 all_results.append(result["row"])
@@ -86,6 +103,14 @@ class EISFitter:
                         "freq": freq,
                         "Z": z,
                         "Z_fit": result["z_fit"],
+                        "lin_kk": result.get("lin_kk", {}),
+                        "n_outliers_removed": (
+                            n_points_before_outlier_removal
+                            - n_points_after_outlier_removal
+                            if n_points_before_outlier_removal is not None
+                            and n_points_after_outlier_removal is not None
+                            else np.nan
+                        ),
                     }
 
         self._save_results(
@@ -98,16 +123,46 @@ class EISFitter:
         return all_fit_data
 
     def _fit_one(
-        self, sample_name, circuit_name, circuit_info, freq, z, full_terminal=True
+        self,
+        sample_name,
+        circuit_name,
+        circuit_info,
+        freq,
+        z,
+        validation_parameters=None,
+        full_terminal=True,
+        n_outliers_removed=None,
     ):
-        circuit_string = circuit_info["string"]
-        initial_guess = circuit_info["guess"]
-        circuit_mapping = circuit_info["mapping"]
 
-        if full_terminal:
-            print(f"  Trying circuit: {circuit_name}")
+        if validation_parameters is None:
+            validation_parameters = {}
+
+        lin_kk_result = {}
+        lin_kk_config = validation_parameters.get("lin_kk", {})
 
         try:
+            if lin_kk_config.get("enabled", False):
+                validator = LinKKValidator(
+                    c=lin_kk_config.get("c", 0.85),
+                    max_M=lin_kk_config.get("max_M", 50),
+                    fit_type=lin_kk_config.get("fit_type", "complex"),
+                    add_cap=lin_kk_config.get("add_cap", True),
+                )
+
+                lin_kk_result = validator.run(freq, z)
+
+            self._check_lin_kk_acceptance(
+                lin_kk_result=lin_kk_result,
+                lin_kk_config=lin_kk_config,
+            )
+
+            circuit_string = circuit_info["string"]
+            initial_guess = circuit_info["guess"]
+            circuit_mapping = circuit_info["mapping"]
+
+            if full_terminal:
+                print(f"  Trying circuit: {circuit_name}")
+
             circuit = CustomCircuit(
                 circuit=circuit_string,
                 initial_guess=initial_guess,
@@ -148,17 +203,19 @@ class EISFitter:
                 "fit_success": True,
                 "chi_square": chi_square,
                 "reduced_chi_square": reduced_chi_square,
+                "lin_kk_success": lin_kk_result.get("lin_kk_success", np.nan),
+                "lin_kk_error": lin_kk_result.get("lin_kk_error", ""),
+                "lin_kk_M": lin_kk_result.get("lin_kk_M", np.nan),
+                "lin_kk_mu": lin_kk_result.get("lin_kk_mu", np.nan),
+                "n_outliers_removed" : n_outliers_removed,
             }
 
             for name, value in zip(mapped_names, circuit.parameters_):
                 row[name] = value
 
-            # Reject fits for which at least one fitted parameter has
-            # a standard error larger than 100% of the fitted value.
             bad_parameters = []
 
             if hasattr(circuit, "conf_") and circuit.conf_ is not None:
-
                 for name, value, sd in zip(
                     mapped_names,
                     circuit.parameters_,
@@ -187,10 +244,13 @@ class EISFitter:
                     + ", ".join(bad_parameters)
                 )
 
+            row["lin_kk"] = lin_kk_result
+
             return {
                 "success": True,
                 "row": row,
                 "z_fit": z_fit,
+                "lin_kk": lin_kk_result,
             }
 
         except Exception as exc:
@@ -201,13 +261,26 @@ class EISFitter:
                 "row": {
                     "sample": sample_name,
                     "circuit_name": circuit_name,
-                    "circuit_string": circuit_string,
+                    "circuit_string": circuit_info["string"],
                     "fit_success": False,
                     "error": str(exc),
                     "chi_square": np.nan,
                     "reduced_chi_square": np.nan,
+                    "lin_kk_success": lin_kk_result.get("lin_kk_success", np.nan),
+                    "lin_kk_error": lin_kk_result.get("lin_kk_error", ""),
+                    "lin_kk_M": lin_kk_result.get("lin_kk_M", np.nan),
+                    "lin_kk_mu": lin_kk_result.get("lin_kk_mu", np.nan),
+                    "lin_kk_max_abs_residual_percent": lin_kk_result.get(
+                        "lin_kk_max_abs_residual_percent",
+                        np.nan,
+                    ),
+                    "lin_kk_mean_abs_residual_percent": lin_kk_result.get(
+                        "lin_kk_mean_abs_residual_percent",
+                        np.nan,
+                    ),
                 },
                 "z_fit": None,
+                "lin_kk": lin_kk_result,
             }
 
     def _save_results(
@@ -223,7 +296,15 @@ class EISFitter:
         - SD and percent-error columns for those parameters
         """
 
-        results_df = pd.DataFrame(all_results)
+        csv_results = []
+
+        # removes lin_kk dictionary so it's not parsed in the csv
+        for result in all_results:
+            result_for_csv = result.copy()
+            result_for_csv.pop("lin_kk", None)
+            csv_results.append(result_for_csv)
+
+        results_df = pd.DataFrame(csv_results)
 
         if results_df.empty:
             return
@@ -233,15 +314,13 @@ class EISFitter:
             "circuit_name",
             "circuit_string",
             "fit_success",
-            "fit_status",
-            "covariance_warning",
             "chi_square",
             "reduced_chi_square",
-            "mean_real_residual_percent",
-            "mean_imag_residual_percent",
-            "mean_abs_residual_percent",
-            "max_abs_residual_percent",
-            "omega_max",
+            "n_outliers_removed",
+            "lin_kk_success",
+            "lin_kk_error",
+            "lin_kk_M",
+            "lin_kk_mu",
             "error",
         ]
 
@@ -407,7 +486,9 @@ class EISFitter:
 
         return freq_fit, z_fit_input
 
-    def load_fit_data(self, experiment):
+    def load_fit_data(self, experiment, validation_parameters=None):
+        if validation_parameters is None:
+            validation_parameters = experiment.validation
         """
         Load existing fitted parameter CSVs and rebuild the fitted impedance
         curves so Bode, Nyquist and residual plots can be regenerated without
@@ -514,6 +595,20 @@ class EISFitter:
 
                 freq, Z_exp = read_impedance_csv(sample_csv)
 
+                lin_kk_result = {}
+
+                lin_kk_config = validation_parameters.get("lin_kk", {})
+
+                if lin_kk_config.get("enabled", False):
+                    validator = LinKKValidator(
+                        c=lin_kk_config.get("c", 0.85),
+                        max_M=lin_kk_config.get("max_M", 50),
+                        fit_type=lin_kk_config.get("fit_type", "complex"),
+                        add_cap=lin_kk_config.get("add_cap", True),
+                    )
+
+                    lin_kk_result = validator.run(freq, Z_exp)
+
                 fitted_circuit = CustomCircuit(
                     circuit=circuit_string,
                     initial_guess=list(fitted_parameters),
@@ -533,6 +628,7 @@ class EISFitter:
                         "freq": freq,
                         "Z": Z_exp,
                         "Z_fit": Z_fit,
+                        "lin_kk": lin_kk_result,
                         "fitted_parameters": fitted_parameters,
                         "raw_param_names": raw_param_names,
                         "sample_csv": sample_csv,
@@ -544,3 +640,116 @@ class EISFitter:
                 all_fit_data[circuit_name][sample_name] = fit_entry
 
         return all_fit_data
+
+    def _check_lin_kk_acceptance(self, lin_kk_result, lin_kk_config):
+        """
+        Reject the fit if Lin-KK validation is enabled and failed.
+        """
+
+        if not lin_kk_config.get("enabled", False):
+            return
+
+        if not lin_kk_config.get("reject_on_fail", False):
+            return
+
+        if not lin_kk_result.get("lin_kk_success", False):
+            error = lin_kk_result.get("lin_kk_error", "unknown Lin-KK error")
+
+            raise RuntimeError(f"Fit rejected: Lin-KK validation failed ({error})")
+
+    def _remove_quantile_outliers(
+        self,
+        freq,
+        z,
+        outlier_config,
+        sample_name=None,
+        full_terminal=True,
+    ):
+        """
+        Remove EIS points using a quantile/IQR rule.
+
+        A point is removed if any selected feature falls outside:
+
+            Q1 - threshold * IQR
+            Q3 + threshold * IQR
+
+        Features can be:
+            - log_modulus
+            - phase
+            - real
+            - imag
+        """
+
+        if not outlier_config.get("enabled", False):
+            return freq, z
+
+        from scipy.stats import mstats
+
+        threshold = float(outlier_config.get("threshold", 1.5))
+        features = outlier_config.get(
+            "features",
+            ["log_modulus", "phase"],
+        )
+
+        freq = np.asarray(freq, dtype=float)
+        z = np.asarray(z, dtype=complex)
+
+        valid = (
+            np.isfinite(freq)
+            & (freq > 0)
+            & np.isfinite(z.real)
+            & np.isfinite(z.imag)
+            & (np.abs(z) > 0)
+        )
+
+        keep = valid.copy()
+
+        feature_data = {}
+
+        if "log_modulus" in features:
+            feature_data["log_modulus"] = np.log10(np.abs(z))
+
+        if "phase" in features:
+            feature_data["phase"] = np.angle(z, deg=True)
+
+        if "real" in features:
+            feature_data["real"] = z.real
+
+        if "imag" in features:
+            feature_data["imag"] = z.imag
+
+        for feature_name, values in feature_data.items():
+            values = np.asarray(values, dtype=float)
+
+            feature_valid = np.isfinite(values) & valid
+
+            if np.sum(feature_valid) < 4:
+                continue
+
+            q1, q3 = mstats.mquantiles(
+                values[feature_valid],
+                prob=[0.25, 0.75],
+            )
+
+            iqr = q3 - q1
+
+            if not np.isfinite(iqr) or iqr == 0:
+                continue
+
+            lower = q1 - threshold * iqr
+            upper = q3 + threshold * iqr
+
+            feature_keep = np.isfinite(values) & (values >= lower) & (values <= upper)
+
+            keep &= feature_keep
+
+        n_removed = int(np.sum(valid) - np.sum(keep))
+
+        if full_terminal and n_removed > 0:
+            prefix = f"{sample_name}: " if sample_name else ""
+            print(
+                f"{prefix}removed {n_removed} outlier point(s) "
+                f"using quantile/IQR threshold={threshold}"
+            )
+
+        return freq[keep], z[keep]

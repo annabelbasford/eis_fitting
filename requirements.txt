@@ -6,3 +6,4 @@ seaborn>=0.12
 impedance>=1.7
 galvani>=0.5
 tqdm>=4.66
+scipy>=1.11,<1.15

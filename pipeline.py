@@ -49,6 +49,7 @@ class EISPipeline:
         experiment = self.load_experiment(experiment_path)
 
         run_parameters = experiment.run
+        validation_parameters = experiment.validation
 
         if self.full_terminal:
             print(
@@ -101,13 +102,15 @@ class EISPipeline:
 
                 all_fit_data = EISFitter(self.circuits).run(
                     experiment,
-                    full_terminal=self.full_terminal,
                 )
 
             else:
                 if self.full_terminal:
                     print("Fits folder already exists. Skipping fitting.")
-                all_fit_data = EISFitter(self.circuits).load_fit_data(experiment)
+                all_fit_data = EISFitter(self.circuits).load_fit_data(
+                    experiment=experiment,
+                    validation_parameters=experiment.validation,
+                )
 
                 if not all_fit_data:
                     if self.full_terminal:
@@ -136,8 +139,10 @@ class EISPipeline:
                     all_fit_data=all_fit_data,
                     plot_fits=all_fit_data is not None,
                     plot_analysis=True,
-                    plot_residuals=run_parameters.get("plot_residuals", True),
-                    display_chi_square=run_parameters.get("display_chi_square", True),
+                    plot_residuals=validation_parameters.get("plot_residuals", True),
+                    display_chi_square=validation_parameters.get(
+                        "display_chi_square", True
+                    ),
                 )
 
         else:

@@ -506,6 +506,72 @@ class FitPlotter:
             },
         )
 
+    def plot_lin_kk(
+        self,
+        sample,
+        lin_kk_result,
+        save_folder,
+        dpi
+    ):
+        
+        if not lin_kk_result:
+
+            return
+
+        if not lin_kk_result.get("lin_kk_success", False):
+            return
+
+        freq = lin_kk_result.get("lin_kk_freq")
+        res_real = lin_kk_result.get("lin_kk_res_real_percent")
+        res_imag = lin_kk_result.get("lin_kk_res_imag_percent")
+
+        if freq is None or res_real is None or res_imag is None:
+            return
+
+        save_folder.mkdir(parents=True, exist_ok=True)
+
+        fig, ax = plt.subplots(figsize=(6, 4))
+
+        ax.axhline(0, color="black", linewidth=0.8)
+
+        ax.semilogx(
+            freq,
+            res_real,
+            "o-",
+            label="Real residual",
+        )
+
+        ax.semilogx(
+            freq,
+            res_imag,
+            "s-",
+            label="Imaginary residual",
+        )
+
+        ax.set_xlabel("Frequency (Hz)")
+        ax.set_ylabel("Lin-KK residual (%)")
+
+        ax.set_title(
+            f"{sample} | Lin-KK validation\n"
+            f"M={lin_kk_result.get('lin_kk_M')}, "
+            f"mu={lin_kk_result.get('lin_kk_mu'):.3f}"
+        )
+
+        ax.grid(True, which="both", alpha=0.3)
+        ax.legend()
+
+        save_path = save_folder / f"{sample}_lin_KK_residuals"
+
+        self.figure_saver.save(
+            save_path=save_path,
+            fig=fig,
+            axes={ax},
+            dpi=dpi
+
+        )
+
+        plt.close(fig)
+
     @staticmethod
     def _format_fit_statistics(chi_square=None, reduced_chi_square=None):
         """
