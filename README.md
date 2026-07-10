@@ -1,8 +1,10 @@
 # EIS Fitting
 
+> **Recommended environment**: this workflow is recommended for a Linux-like environment. On Windows, using WSL is advised to avoid path, dependency, and terminal-behaviour issues.
+
 Object-oriented Python workflow for preprocessing, fitting, analysing, and plotting electrochemical impedance spectroscopy (EIS) data from conductive hydrogel experiments.
 
-The project was developed for automated fitting of conductive hydrogel impedance spectra but could be used with other materials given the proper equivalent circuits. It currently supports raw data preprocessing, equivalent-circuit fitting, fitted-parameter extraction, derived conductivity calculations, and generation of Bode, Nyquist, and parameter-summary plots.
+The project was developed for automated fitting of conductive hydrogel impedance spectra but could be used with other materials given the appropriate equivalent circuits. It currently supports raw data preprocessing, optional automatic outlier removal, Lin-KK validation, equivalent-circuit fitting, fitted-parameter extraction, fitted-parameter error filtering, derived conductivity calculations, and generation of Bode, Nyquist, residual, and parameter-summary plots.
 
 ---
 
@@ -32,11 +34,13 @@ EISPipeline
     │       └── can create pre-fitting Bode/Nyquist plots for manual preprocessing
     │
     ├── EISFitter
+    │       ├── optionally removes outliers before fitting
+    │       ├── optionally validates spectra with Lin-KK before fitting
     │       ├── fits selected equivalent circuits
     │       ├── saves one fitted-parameter CSV per circuit
     │       ├── calculates chi-square and reduced chi-square
     │       ├── calculates residuals and fitted-parameter uncertainties
-    │       └── rejects non-identifiable fits when parameter error exceeds 500%
+    │       └── rejects non-identifiable fits when parameter error exceeds the configured threshold
     │
     └── EISAnalyser / EISPlotter
             ├── calculates derived quantities such as selected conductivities
@@ -248,9 +252,9 @@ This mode keeps the raw and processed data together. It is simple and useful for
 
 The current architecture uses three JSON layers:
 
-1. a root-level **global configuration file**;
-2. an experiment-level **metadata file**;
-3. a reusable **method file**.
+1. a root-level **global configuration file**
+2. an experiment-level **metadata file**
+3. a reusable **method file**
 
 The separation is:
 
@@ -266,7 +270,7 @@ This avoids repeating geometry and run options in every experiment folder.
 
 ### 5.1 Global configuration file
 
-The root-level `global.json` file is placed next to `main.py`.
+The root-level `global.json` file is placed next to `main.py`. It controls where the data are read from, where outputs are written, which workflow steps are enabled, how spectra are validated before fitting, how non-identifiable fits are rejected, and how figures are saved.
 
 Example:
 
@@ -274,18 +278,41 @@ Example:
 {
     "paths": {
         "data_path": "/home/enzos/data/",
-        "user": "femke",
-        "project": "article",
+        "user": "enzo",
+        "project": "test",
         "output_mode": "workspace",
         "output_path": "/home/enzos/data_processed"
     },
     "run": {
         "pre_plot": false,
         "plot": true,
-        "plot_residuals": true,
+        "compute_mean_parameters": false
+    },
+    "outlier_removal": {
+        "enabled": true,
+        "threshold": 1.5,
+        "features": [
+            "log_modulus",
+            "phase"
+        ]
+    },
+    "validation": {
         "display_chi_square": true,
-        "fitting_frequency_range": [10,null],
-        "compute_mean_parameters" : false
+        "fitting_frequency_range": [
+            10,
+            1e6
+        ],
+        "plot_residuals": true,
+        "lin_kk": {
+            "enabled": true,
+            "plot": true,
+            "reject_on_fail": true,
+            "c": 0.85,
+            "max_M": 50,
+            "fit_type": "complex",
+            "add_cap": true
+        },
+        "error_percent_param_threshold": 200
     },
     "plotting": {
         "R_and_Q": {
@@ -300,12 +327,17 @@ Example:
         },
         "conductivities": {
             "left_ylim": [
-                0,
-                10
+                null,
+                null
             ],
             "normalize": true,
-            "cmap_name": "Blues",
-            "log_scale": false
+            "cmap_name": "viridis",
+            "log_scale": false,
+            "legend": {
+                "rotation": 0,
+                "ha": "center",
+                "fontsize": 14
+            }
         }
     },
     "save_preferences": {
@@ -323,7 +355,7 @@ Example:
 | Field | Meaning |
 |---|---|
 | `paths.data_path` | Root folder containing the raw data and the `_methods/` folder |
-| `paths.methods_path` | Folder containing reusable method files. If omitted, this can default to `<data_path>/_methods` |
+| `paths.methods_path` | Optional folder containing reusable method files. If omitted, this can default to `<data_path>/_methods` |
 | `paths.user` | User/person folder inside `data_path` |
 | `paths.project` | Project folder inside `data_path/user` |
 | `paths.output_mode` | Either `"local"` or `"workspace"` |
@@ -334,27 +366,173 @@ Example:
 | Field | Meaning |
 |---|---|
 | `run.pre_plot` | If `true`, preprocess only and create preliminary plots. No fitting or analysis is performed afterwards |
-| `run.fit` | If `true`, fitting is allowed when no fitted CSVs exist yet |
+| `run.fit` | Optional. If `true`, fitting is allowed when no fitted CSVs exist yet. If omitted, the workflow can default to fitting enabled |
 | `run.plot` | Master switch for plot generation. If `false`, the workflow can still fit and write CSV files without creating figures |
-| `run.plot_residuals` | If `true`, residual plots are generated when fit plotting is enabled |
-| `run.display_chi_square` | If `true`, fitted Bode/Nyquist plots display chi-square information |
-| `run.fitting_frequency_range` | Frequency window used for fitting, in Hz. Use `null` to fit the full spectrum, or `[f_min, f_max]` to restrict the fit. One-sided ranges such as `[1, null]` or `[null, 100000]` are also supported |
 | `run.compute_mean_parameters` | If `true`, appends one `MEAN` row to each circuit parameter CSV. The mean is computed over successful fits only. Parameter uncertainties are propagated from individual fitted standard deviations using $u(\bar{x}) = \sqrt{\sum_i u_i^2}/n$. Since $\chi^2$ and $\chi^2_{\mathrm{red}}$ do not have individual fitted uncertainties, their uncertainty is estimated from the sample-to-sample standard deviation across successful fits. |
+
+#### `outlier_removal`
+
+The `outlier_removal` block controls automatic removal of points before fitting.
+
+```json
+"outlier_removal": {
+    "enabled": true,
+    "threshold": 1.5,
+    "features": [
+        "log_modulus",
+        "phase"
+    ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `outlier_removal.enabled` | If `true`, the fitter removes outliers before applying the fitting frequency range and before equivalent-circuit fitting |
+| `outlier_removal.threshold` | Quantile/IQR threshold. A value of `1.5` corresponds to the standard IQR outlier rule; larger values such as `2.0` or `3.0` are more conservative |
+| `outlier_removal.features` | List of features used to detect outliers. Supported entries can include `log_modulus`, `phase`, `real`, and `imag` depending on the fitter implementation |
+
+The IQR rule removes points outside:
+
+$$
+Q_1 - t \times IQR
+\quad \text{to} \quad
+Q_3 + t \times IQR
+$$
+
+where $t$ is `outlier_removal.threshold`.
+
+The recommended default is to use:
+
+```json
+"features": [
+    "log_modulus",
+    "phase"
+]
+```
+
+because these two quantities are usually the most convenient for identifying isolated spikes in Bode plots.
+
+The parameter CSV can record how many points were removed, for example:
+
+```text
+n_points_before_outlier_removal
+n_points_after_outlier_removal
+n_invalid_points_removed
+n_quantile_outliers_removed
+n_outliers_removed
+```
+
+#### `validation`
+
+The `validation` block contains settings used to validate spectra, select the fitted frequency range, display fit-quality metrics, and reject poorly identifiable fits.
+
+| Field | Meaning |
+|---|---|
+| `validation.display_chi_square` | If `true`, fitted Bode/Nyquist plots display chi-square and reduced chi-square information |
+| `validation.fitting_frequency_range` | Frequency window used for fitting, in Hz. Use `null` to fit the full spectrum, or `[f_min, f_max]` to restrict the fit. One-sided ranges such as `[10, null]` or `[null, 1000000]` are also supported |
+| `validation.plot_residuals` | If `true`, residual plots are generated when fit plotting is enabled |
+| `validation.error_percent_param_threshold` | Maximum allowed fitted-parameter percentage error. If one fitted parameter has a percentage error above this threshold, the fit is rejected |
+| `validation.lin_kk` | Nested block controlling Lin-KK validation |
+
+For example:
+
+```json
+"error_percent_param_threshold": 200
+```
+
+means that a fit is rejected if any fitted parameter has:
+
+```text
+<parameter>_percent_error > 200
+```
+
+This replaces a hard-coded rejection limit and makes the identifiability criterion explicit from `global.json`.
+
+#### `validation.lin_kk`
+
+The Lin-KK block controls Kramers-Kronig consistency validation before equivalent-circuit fitting.
+
+```json
+"lin_kk": {
+    "enabled": true,
+    "plot": true,
+    "reject_on_fail": true,
+    "c": 0.85,
+    "max_M": 50,
+    "fit_type": "complex",
+    "add_cap": true
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `validation.lin_kk.enabled` | If `true`, Lin-KK validation is performed before fitting |
+| `validation.lin_kk.plot` | If `true`, Lin-KK validation plots are generated when the plotter supports them |
+| `validation.lin_kk.reject_on_fail` | If `true`, equivalent-circuit fitting is rejected when Lin-KK validation fails |
+| `validation.lin_kk.c` | Under/over-fitting control parameter used by `impedance.py` Lin-KK validation. The common default is `0.85` |
+| `validation.lin_kk.max_M` | Maximum number of RC elements considered by the Lin-KK validation model |
+| `validation.lin_kk.fit_type` | Which part of the impedance is used during Lin-KK fitting. Typical values are `"real"`, `"imag"`, or `"complex"` |
+| `validation.lin_kk.add_cap` | If `true`, adds an additional capacitance term in the Lin-KK validation model. This can help for spectra with strongly capacitive low-frequency behaviour |
+
+Lin-KK validation checks whether the measured spectrum is consistent with the assumptions required for EIS interpretation: linearity, causality, and stability. It does not prove that a chosen equivalent circuit is physically correct; it only checks whether the spectrum itself is internally consistent enough to be interpreted.
+
+If `reject_on_fail` is enabled and Lin-KK fails, the fit row is saved with:
+
+```text
+fit_success = False
+error = Fit rejected: Lin-KK validation failed (...)
+```
+
+and no fitted plots are generated for that sample/circuit.
 
 #### `plotting`
 
-Manual y-axis limits for analysis plots. Each entry corresponds to a figure type.
+Manual plot settings for analysis plots. Each entry corresponds to a figure type.
 
-Example:
+For R/Q or R/C bar plots:
 
 ```json
 "R_and_Q": {
     "left_ylim": [1e-1, 1e15],
-    "right_ylim": [1e-12, 1e-2]
+    "right_ylim": [1e-10, 1e-1]
 }
 ```
 
-Use `null` option in json to keep automatic Matplotlib scaling.
+| Field | Meaning |
+|---|---|
+| `plotting.R_and_Q.left_ylim` | Limits for the left axis, usually resistance |
+| `plotting.R_and_Q.right_ylim` | Limits for the right axis, usually CPE magnitude or capacitance |
+
+For conductivity summary plots:
+
+```json
+"conductivities": {
+    "left_ylim": [
+        null,
+        null
+    ],
+    "normalize": true,
+    "cmap_name": "viridis",
+    "log_scale": false,
+    "legend": {
+        "rotation": 0,
+        "ha": "center",
+        "fontsize": 14
+    }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `plotting.conductivities.left_ylim` | Y-axis limits for conductivity summary plots. Use `[null, null]` for automatic scaling |
+| `plotting.conductivities.normalize` | If `true`, conductivity values are normalized, typically by the maximum value in the plotted conductivity series |
+| `plotting.conductivities.cmap_name` | Matplotlib colormap used to colour bars across samples, for example `"viridis"`, `"Blues"`, `"magma"`, or `"cividis"` |
+| `plotting.conductivities.log_scale` | If `true`, the conductivity y-axis is plotted on a logarithmic scale |
+| `plotting.conductivities.legend.rotation` | Rotation angle of the sample labels on the x-axis |
+| `plotting.conductivities.legend.ha` | Horizontal alignment of the sample labels, for example `"center"`, `"right"`, or `"left"` |
+| `plotting.conductivities.legend.fontsize` | Font size of the sample labels |
+
+Use `null` in JSON to keep automatic Matplotlib scaling.
 
 #### `save_preferences`
 
@@ -367,7 +545,7 @@ Use `null` option in json to keep automatic Matplotlib scaling.
 
 #### `full_terminal`
 
-If `true`, the workflow prints more information about selected experiments, paths, skipped fits, failed fits, and generated outputs.
+If `true`, the workflow prints more information about selected experiments, paths, outlier removal, skipped fits, failed fits, and generated outputs.
 
 ---
 
@@ -405,7 +583,7 @@ loads:
 data/_methods/conductive_hydrogel.json
 ```
 
-Run options such as `pre_plot`, `plot`, `plot_residuals`, and `display_chi_square` are not stored in each experiment metadata but are rather controlled globally from `global.json`.
+Run options such as `pre_plot` and `plot`, validation options such as `plot_residuals`, `display_chi_square`, `fitting_frequency_range`, and Lin-KK settings, and analysis options such as conductivity plot settings are not stored in each experiment metadata but are controlled globally from `global.json`.
 
 | Field | Meaning |
 |---|---|
@@ -438,7 +616,7 @@ Example method file:
         "SD_thickness_cm": 0.01,
         "area_cm2": 1.0,
         "SD_area_cm2": 0.2
-    },
+    }
 }
 ```
 
@@ -499,6 +677,8 @@ Typical use:
 ```text
 processed CSVs
     ↓
+optional outlier removal and Lin-KK validation
+    ↓
 equivalent-circuit fitting
     ↓
 fit metrics and residuals
@@ -544,7 +724,7 @@ The fitted parameter CSV files are kept, while the plotter can recreate the Bode
 2. Inspect the cleaned CSV files and remove bad points if needed.
 3. Set `pre_plot=false`, `fit=true`, and `plot=true`.
 4. Run the workflow to fit the selected circuits and generate plots.
-5. Inspect Nyquist, Bode, residual plots, parameter errors, and conductivity summaries.
+5. Inspect Nyquist, Bode, residual plots, Lin-KK results, parameter errors, and conductivity summaries.
 6. To change plotting style only, delete `fits/plots/` and rerun with `plot=true`.
 
 ---
@@ -585,7 +765,7 @@ processed/<person>/<project>/<experiment>/
         └── <experiment>_<circuit_1>_Rbulk_conductivity_all_samples.png
 ```
 
-If a fit is rejected because one or more parameter percentage errors exceed 500%, the parameter CSV records the failure. In that case, no Bode, Nyquist, residual, or bar plots are generated for that failed fit. Depending on when the output folders are created, an empty plot folder may remain; this is expected and indicates that the fit was skipped after validation.
+If a fit is rejected because Lin-KK validation fails or because one or more parameter percentage errors exceed `validation.error_percent_param_threshold`, the parameter CSV records the failure. In that case, no Bode, Nyquist, residual, or bar plots are generated for that failed fit. Depending on when the output folders are created, an empty plot folder may remain; this is expected and indicates that the fit was skipped after validation.
 
 --- 
 
@@ -687,23 +867,33 @@ For each selected circuit and each sample, the fitter:
 
 1. reads the processed experimental EIS CSV
 2. builds the complex impedance array
-3. creates a `CustomCircuit`
-4. fits the circuit using the supplied initial guesses (optionally restricting the data to `run.fitting_frequency_range`)
-5. predicts the fitted impedance
-6. extracts fitted parameters
-7. calculates standard deviations and percentage errors where possible
-8. calculates residuals, chi-square, and reduced chi-square through `fitting/fit_metrics.py`
-9. rejects the fit if any fitted parameter has a percentage error above 500%
-10. saves the result to a circuit-specific CSV
-11. generates fitted Bode, Nyquist, and residual plots if plotting is enabled and the fit passed validation
+3. optionally removes outliers using the `outlier_removal` block from `global.json`
+4. optionally restricts the data to `validation.fitting_frequency_range`
+5. optionally validates the spectrum using Lin-KK validation
+6. creates a `CustomCircuit`
+7. fits the circuit using the supplied initial guesses
+8. predicts the fitted impedance
+9. extracts fitted parameters
+10. calculates standard deviations and percentage errors where possible
+11. calculates residuals, chi-square, and reduced chi-square through `fitting/fit_metrics.py`
+12. rejects the fit if any fitted parameter has a percentage error above `validation.error_percent_param_threshold`
+13. saves the result to a circuit-specific CSV
+14. generates fitted Bode, Nyquist, residual, Lin-KK, and analysis plots if plotting is enabled and the fit passed validation
 
-The 500% parameter-error threshold is used to reject visually good but non-identifiable fits. A fit can have a good chi-square and scattered residuals while still having poorly determined parameters. In that situation, the equivalent circuit may reproduce the spectrum, but the individual elements should not be interpreted physically.
+The fitted-parameter error threshold is used to reject visually good but non-identifiable fits. A fit can have a good chi-square and scattered residuals while still having poorly determined parameters. In that situation, the equivalent circuit may reproduce the spectrum, but the individual elements should not be interpreted physically.
 
-Rejected fits are stored in the CSV with:
+Rejected fits are stored in the CSV with messages such as:
 
 ```text
 fit_success = False
-error = Fit rejected: parameter uncertainty above 500% for ...
+error = Fit rejected: parameter uncertainty above 200% for ...
+```
+
+or:
+
+```text
+fit_success = False
+error = Fit rejected: Lin-KK validation failed (...)
 ```
 
 and are not plotted.
@@ -714,8 +904,8 @@ and are not plotted.
 
 The fitting workflow evaluates the quality of each equivalent-circuit fit using two complementary approaches:
 
-1. numerical fit-quality metrics, mainly `chi_square` and `reduced_chi_square`;
-2. residual plots, which show how the fitting error is distributed across frequency.
+1. numerical fit-quality metrics, mainly `chi_square` and `reduced_chi_square`
+2. residual plots, which show how the fitting error is distributed across frequency
 
 These metrics are useful for comparing fits, but they should not be interpreted as proof that a circuit is physically unique or correct.
 
@@ -751,12 +941,12 @@ $$
 
 The `fit_metrics.py` module centralises these calculations. It is responsible for computing:
 
-* complex residuals;
-* relative real residuals;
-* relative imaginary residuals;
-* absolute residuals;
-* `chi_square`;
-* `reduced_chi_square`.
+* complex residuals
+* relative real residuals
+* relative imaginary residuals
+* absolute residuals
+* `chi_square`
+* `reduced_chi_square`
 
 ### 10.2 Chi-square
 
@@ -784,8 +974,8 @@ circuit.fit(freq, z, weight_by_modulus=True)
 
 In practical terms:
 
-* a lower `chi_square` means that the fitted curve is numerically closer to the experimental data;
-* a higher `chi_square` means that the fitted curve deviates more strongly from the experimental data.
+* a lower `chi_square` means that the fitted curve is numerically closer to the experimental data
+* a higher `chi_square` means that the fitted curve deviates more strongly from the experimental data
 
 However, raw `chi_square` depends on the number of data points and the number of fitted parameters. For this reason, it is mainly useful when comparing fits with the same circuit and the same frequency range.
 
@@ -804,8 +994,8 @@ where $\nu$ is the number of degrees of freedom of the fit.
 
 For complex EIS data, each frequency point contributes two fitted values:
 
-* the real impedance, $Z'$;
-* the imaginary impedance, $Z''$.
+* the real impedance, $Z'$
+* the imaginary impedance, $Z''$
 
 Therefore, if there are $N$ valid frequency points and $p$ fitted circuit parameters, the number of degrees of freedom is calculated as:
 
@@ -833,7 +1023,9 @@ While `chi_square` and `reduced_chi_square` give a single numerical estimate of 
 Residual plots are generated when the following option is set in `global.json`:
 
 ```json
-"plot_residuals": true
+"validation": {
+    "plot_residuals": true
+}
 ```
 
 The residual plots show, across the whole frequency range, the relative deviation between the experimental and fitted impedance (normalized by the magnitude of the experimental impedance).
@@ -864,7 +1056,9 @@ Systematic residual patterns are important warning signs. For example:
 The fitted Bode and Nyquist plots can display both `chi_square` and `reduced_chi_square` directly on the figure when the following option is set in `global.json`:
 
 ```json
-"display_chi_square": true
+"validation": {
+    "display_chi_square": true
+}
 ```
 
 This makes it easier to visually compare the fitted spectrum and the numerical fit quality at the same time.
@@ -888,7 +1082,7 @@ In practice, the fit should be considered reliable only when the following condi
 
 A fit with a low `reduced_chi_square` but structured residuals should be interpreted cautiously. This means the circuit reproduces the overall shape of the impedance spectrum but does not fully capture all frequency-dependent processes.
 
-Similarly, a fit with a low `reduced_chi_square` but very large parameter standard deviations is considered poorly identifiable. In the current workflow, fits are rejected when any fitted parameter has a percentage error greater than 500%.
+Similarly, a fit with a low `reduced_chi_square` but very large parameter standard deviations is considered poorly identifiable. In the current workflow, fits are rejected when any fitted parameter has a percentage error greater than `validation.error_percent_param_threshold`.
 
 ---
 
@@ -912,6 +1106,15 @@ fit_success
 error
 chi_square
 reduced_chi_square
+n_points_before_outlier_removal
+n_points_after_outlier_removal
+n_invalid_points_removed
+n_quantile_outliers_removed
+n_outliers_removed
+lin_kk_success
+lin_kk_error
+lin_kk_M
+lin_kk_mu
 R_i
 SD_R_i
 R_i_percent_error
@@ -951,6 +1154,8 @@ n_mean_samples = <number of successful fits>
 If a fit is rejected, the CSV row still records the sample, circuit, `fit_success=False`, the error message, and `NaN` fit metrics. This makes failed fits visible without silently dropping samples.
 
 When a restricted fitting frequency range is used, the CSV records the actual frequency window used for each fit. This makes it possible to trace whether parameters were obtained from the full spectrum or from a selected frequency interval.
+
+When automatic outlier removal and Lin-KK validation are enabled, the CSV can also record outlier-removal counts and Lin-KK diagnostic values. This makes failed or accepted fits traceable from the numerical output alone.
 
 ---
 
@@ -1128,7 +1333,10 @@ Each plot contains:
 - one conductivity type only
 - optional error bars
 - automatic or user-defined y-axis scaling
+- optional normalization
+- optional logarithmic scaling
 - a colour gradient across samples for style
+- configurable sample-label rotation, alignment, and font size through `plotting.conductivities.legend`
 
 The conductivity plots are saved directly in `fits/plots/`, not inside the per-sample folders.
 
@@ -1161,11 +1369,11 @@ Controlled by:
 
 ```json
 "save_preferences": {
-        "transparent": false,
-        "png": true,
-        "svg": false,
-        "dpi": 250
-    }
+    "transparent": false,
+    "png": true,
+    "svg": false,
+    "dpi": 250
+}
 ```
 
 Possible options:
@@ -1179,55 +1387,101 @@ Possible options:
 
 The `dpi` option is especially useful when balancing speed, file size, and figure quality. For quick testing, values such as `100` or `150` can make plotting faster. For reports or publications, `300` or higher is recommended.
 
-### 14.2 Plotting limits
+### 14.2 R/Q or R/C parameter plots
 
-Manual y-axis limits can be supplied for bar charts.
-
-Example:
+Manual y-axis limits for parameter bar charts are controlled by:
 
 ```json
-"plotting_limits": {
+"plotting": {
     "R_and_Q": {
-        "left_ylim": [1e0, 1e6],
-        "right_ylim": [1e-10, 1e-2]
-    },
-    "conductivities": {
-        "left_ylim": null,
-        "right_ylim": null
+        "left_ylim": [1e-1, 1e15],
+        "right_ylim": [1e-10, 1e-1]
     }
 }
 ```
 
-If limits are set to `null`, Matplotlib automatic scaling is used.
+| Option | Meaning |
+|---|---|
+| `plotting.R_and_Q.left_ylim` | Y-axis limits for the left axis, usually resistance |
+| `plotting.R_and_Q.right_ylim` | Y-axis limits for the right axis, usually CPE magnitude or capacitance |
 
-For conductivity plots, automatic scaling is often recommended because conductivities can vary significantly between experiments.
+Use `[null, null]` to keep automatic Matplotlib scaling.
 
-### 14.3 Chi-square display
+### 14.3 Conductivity summary plots
+
+Conductivity plot style is controlled by:
+
+```json
+"plotting": {
+    "conductivities": {
+        "left_ylim": [
+            null,
+            null
+        ],
+        "normalize": true,
+        "cmap_name": "viridis",
+        "log_scale": false,
+        "legend": {
+            "rotation": 0,
+            "ha": "center",
+            "fontsize": 14
+        }
+    }
+}
+```
+
+| Option | Meaning |
+|---|---|
+| `plotting.conductivities.left_ylim` | Y-axis limits for conductivity plots. Use `[null, null]` for automatic scaling |
+| `plotting.conductivities.normalize` | If `true`, conductivity values are normalized, typically by the maximum value in the plotted series |
+| `plotting.conductivities.cmap_name` | Matplotlib colormap used for the conductivity bars |
+| `plotting.conductivities.log_scale` | If `true`, use a logarithmic y-axis |
+| `plotting.conductivities.legend.rotation` | Rotation of the sample labels on the x-axis |
+| `plotting.conductivities.legend.ha` | Horizontal alignment of the sample labels |
+| `plotting.conductivities.legend.fontsize` | Font size of the sample labels |
+
+Examples of useful Matplotlib colormaps:
+
+```text
+viridis
+Blues
+Greys
+magma
+cividis
+```
+
+To reverse a colormap, append `_r`, for example:
+
+```text
+viridis_r
+Blues_r
+```
+
+For conductivity plots, automatic y-axis scaling is often recommended because conductivities can vary significantly between experiments.
+
+### 14.4 Chi-square display
 
 Chi-square display on fit plots is controlled by:
 
 ```json
-"display_chi_square": true
+"validation": {
+    "display_chi_square": true
+}
 ```
 
 If disabled, chi-square and reduced chi-square are still calculated and stored in the CSV, but they are not written directly on the figures.
 
-### 14.4 Conductivity colour gradient (in analysis_plots.py)
+### 14.5 Residual plotting
 
-The conductivity summary plots can use a Matplotlib colormap.
+Residual plot generation is controlled by:
 
-Examples:
-
-```python
-cmap_name = "viridis"
-cmap_name = "Blues"
-cmap_name = "Greys"
-cmap_name = "magma"
-cmap_name = "cividis"
+```json
+"validation": {
+    "plot_residuals": true
+}
 ```
 
-> see `https://matplotlib.org/stable/gallery/color/colormap_reference.html` for the list of available colour maps. To reverse the pattern, write `<cmap_name>_r`
----
+If disabled, residual values can still be calculated internally, but residual figures are not generated.
 
 ## 15. Fit warnings and failure handling
 
@@ -1247,28 +1501,33 @@ SD_<parameter>
 
 A fit may be marked as failed if:
 
-- the complex, non linear, least squares method does not converge
+- the complex, non-linear least-squares method does not converge
 - fitted parameters are not finite
 - covariance or standard errors are unavailable
-- one or more fitted parameter percentage errors exceed 500%
+- one or more fitted parameter percentage errors exceed `validation.error_percent_param_threshold`
+- Lin-KK validation fails while `validation.lin_kk.reject_on_fail` is enabled
 - the circuit prediction fails
 - the fit raises an exception
 
-The 500% parameter-error rule is designed to catch non-identifiable fits. These are cases where the circuit reproduces the impedance spectrum, but one or more individual parameters are poorly determined.
+The fitted-parameter error threshold is designed to catch non-identifiable fits. These are cases where the circuit reproduces the impedance spectrum, but one or more individual parameters are poorly determined.
 
-For example:
+For example, with:
+
+```json
+"error_percent_param_threshold": 200
+```
+
+the following value causes the fit to be rejected:
 
 ```text
 R_bulk_percent_error = 250%
 ```
 
-causes the fit to be rejected.
-
 The CSV row then contains:
 
 ```text
 fit_success = False
-error = Fit rejected: parameter uncertainty above 500% for R_bulk: 250.0%
+error = Fit rejected: parameter uncertainty above 200% for R_bulk: 250.0%
 ```
 
 ## 16. Common issues
@@ -1334,16 +1593,16 @@ negative
 
 before passing them to Matplotlib.
 
-### Fit rejected because parameter error exceeds 500%
+### Fit rejected because parameter error exceeds the configured threshold
 
-A visually good fit can still be rejected if one or more fitted parameters have a standard error larger than the fitted value.
+A visually good fit can still be rejected if one or more fitted parameters have a standard error larger than the configured percentage-error threshold.
 
 This means the equivalent circuit can reproduce the spectrum, but the individual parameter is not reliably identifiable.
 
 Check the `error` column in the fit CSV for a message such as:
 
 ```text
-Fit rejected: parameter uncertainty above 500% for R_bulk: 250.0%
+Fit rejected: parameter uncertainty above 200% for R_bulk: 250.0%
 ```
 
 Rejected fits are not plotted.
@@ -1379,6 +1638,8 @@ The current object-oriented version supports:
 - metadata-driven experiment configuration
 - reusable method files in `data/_methods/`
 - preprocessing and pre-plotting
+- optional automatic quantile/IQR outlier removal
+- optional Lin-KK validation before fitting
 - multi-circuit fitting
 - one fitted-parameter CSV per circuit
 - circuit-specific parameter columns
@@ -1390,7 +1651,7 @@ The current object-oriented version supports:
 - one experiment-level conductivity summary plot per conductivity type
 - configurable plot limits and figure saving through `global.json`
 - re-plotting without refitting by deleting only `fits/plots/`
-- rejection of non-identifiable fits when parameter percentage error exceeds 500%
+- configurable rejection of non-identifiable fits using `validation.error_percent_param_threshold`
 - progress bars and terminal output options
 - optional computation of experiment-level mean fitted parameters per circuit
 - propagated uncertainties for mean parameter rows

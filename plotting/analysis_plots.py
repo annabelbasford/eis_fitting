@@ -15,13 +15,13 @@ class AnalysisPlotter:
         Plot analysis bar charts.
 
         For each circuit:
-        1. Plot R/Q or R/C bar charts for each sample.
+        1. Plot per-sample R/Q or R/C bar charts.
            Saved in:
-               exp/fits/plots/<sample>/<circuit>/
+               experiment.paths.plots / <sample> / <circuit_name> /
 
-        2. Plot one R_i conductivity summary chart for the whole experiment.
+        2. Plot experiment-level conductivity summaries.
            Saved in:
-               exp/fits/plots/
+               experiment.paths.plots /
         """
 
         figure_saver = FigureSaver(experiment.save_preferences)
@@ -35,81 +35,57 @@ class AnalysisPlotter:
                 print(f"Skipping missing file: {parameters_csv}")
                 continue
 
-            # Per-sample R/Q or R/C bar charts
+            df_params = self._read_parameters_csv(parameters_csv)
+
             resistance_columns = self.get_element_columns(
-                parameters_csv,
-                "R",
+                df=df_params,
+                first_chars="R",
             )
 
             q_columns = self.get_element_columns(
-                parameters_csv,
-                "Q",
+                df=df_params,
+                first_chars="Q",
             )
 
             capacitance_columns = self.get_element_columns(
-                parameters_csv,
-                "C",
+                df=df_params,
+                first_chars="C",
             )
 
             right_columns = q_columns
-            right_axis_label = r"Pseudo capacitance " r"($F\times s^{\alpha-1}$)"
-
-            df_params = pd.read_csv(parameters_csv)
+            right_axis_label = r"Pseudo capacitance ($F\times s^{\alpha-1}$)"
 
             if not right_columns:
                 right_columns = capacitance_columns
                 right_axis_label = r"Capacitance ($F$)"
 
-            r_and_q_limits = self.plotting.get("R_and_Q", {})
-
-            conductivities_limits = self.plotting.get("conductivities", {})
-
-            for csv_path in sorted(experiment.paths.csv.glob("*.csv")):
-                sample = csv_path.stem
-
-                # checking if fit was successful for this sample and circuit before plotting
-                row = df_params[
-                    (df_params["sample"] == sample)
-                    & (df_params["circuit_name"] == circuit_name)
-                ]
-
-                if row.empty or not row.iloc[0]["fit_success"]:
-                    continue
-
+            for sample in self._get_successful_sample_names(df_params):
                 self.plot_parameter_bars(
-                    parameters_csv=parameters_csv,
+                    experiment=experiment,
+                    df=df_params,
                     circuit_name=circuit_name,
                     sample=sample,
                     left_columns=resistance_columns,
                     right_columns=right_columns,
-                    left_axis_label=r"Resistance ($\Omega$)",
                     right_axis_label=right_axis_label,
-                    figure_name="R_and_Q",
-                    mapping=self.circuits[circuit_name]["mapping"],
-                    save_root=experiment.paths.plots,
                     figure_saver=figure_saver,
-                    left_ylim=r_and_q_limits.get("left_ylim"),
-                    right_ylim=r_and_q_limits.get("right_ylim"),
-                    show_alpha=True,
-                    dpi=experiment.save_preferences.get("dpi", 300),
                 )
 
-            conductivities_parameters = experiment.plotting["conductivities"]
-            # One experiment-level R_i conductivity chart
             self.plot_conductivities_summary(
                 experiment=experiment,
-                parameters_csv=parameters_csv,
-                figure_saver=figure_saver,
+                df=df_params,
+                parameters_csv_name=parameters_csv.name,
                 circuit_name=circuit_name,
+                figure_saver=figure_saver,
             )
 
     def plot_conductivities_summary(
         self,
         experiment,
-        parameters_csv,
+        df,
+        parameters_csv_name,
         circuit_name,
         figure_saver,
-        dpi=300,
     ):
         """
         Plot one experiment-level conductivity summary per conductivity type.
@@ -147,44 +123,6 @@ class AnalysisPlotter:
         label_ha = label_config.get("ha", "center")
         label_fontsize = label_config.get("fontsize", 14)
 
-        experiment_name = experiment.name
-        save_root = experiment.paths.plots
-
-        def get_conductivity_label(conductivity_col):
-            resistance_name = conductivity_col.replace(
-                "conductivity_S_cm_",
-                "",
-            )
-
-            if resistance_name.startswith("R_"):
-                suffix = resistance_name.replace("R_", "")
-                return rf"$\sigma_{{\mathrm{{{suffix}}}}}$"
-
-            return rf"$\sigma_{{\mathrm{{{resistance_name}}}}}$"
-
-        def get_output_suffix(conductivity_col):
-            resistance_name = conductivity_col.replace(
-                "conductivity_S_cm_",
-                "",
-            )
-
-            safe_name = resistance_name.replace("_", "")
-            return f"{safe_name}_conductivity"
-
-        df = pd.read_csv(parameters_csv)
-        df = self._clean_numeric_dataframe(df)
-
-        if "sample" not in df.columns:
-            print(
-                "\n"
-                + "\033[93m"
-                + "\033[1m"
-                + ":/"
-                + "\033[0m"
-                + f"  Skipping conductivity plot: no sample column in {parameters_csv.name}"
-            )
-            return
-
         conductivity_columns = [
             col
             for col in df.columns
@@ -200,10 +138,12 @@ class AnalysisPlotter:
                 + "\033[1m"
                 + ":/"
                 + "\033[0m"
-                + f"  Skipping conductivity plot: no conductivity columns found in {parameters_csv.name}"
+                + f"  Skipping conductivity plot: "
+                f"no conductivity columns found in {parameters_csv_name}"
             )
             return
 
+        save_root = experiment.paths.plots
         save_root.mkdir(parents=True, exist_ok=True)
 
         for conductivity_col in conductivity_columns:
@@ -217,12 +157,10 @@ class AnalysisPlotter:
             valid = values.notna()
             valid &= np.isfinite(values)
             valid &= values > 0
+            valid &= df["sample"].astype(str).str.upper() != "MEAN"
 
             if "fit_success" in df.columns:
-                fit_success = (
-                    df["fit_success"].astype(str).str.lower().isin(["true", "1", "yes"])
-                )
-                valid &= fit_success
+                valid &= df["fit_success"].apply(self._is_truthy)
 
             plot_columns = ["sample", conductivity_col]
 
@@ -238,7 +176,8 @@ class AnalysisPlotter:
                     + "\033[1m"
                     + ":/"
                     + "\033[0m"
-                    + f"  No valid values found for {conductivity_col} in {circuit_name}"
+                    + f"  No valid values found for {conductivity_col} "
+                    f"in {circuit_name}"
                 )
                 continue
 
@@ -272,7 +211,8 @@ class AnalysisPlotter:
                         + "\033[1m"
                         + ":/"
                         + "\033[0m"
-                        + f"  Could not normalize {conductivity_col}: invalid reference value"
+                        + f"  Could not normalize {conductivity_col}: "
+                        "invalid reference value"
                     )
                     continue
 
@@ -314,7 +254,7 @@ class AnalysisPlotter:
                     **bar_kwargs,
                 )
 
-            conductivity_label = get_conductivity_label(conductivity_col)
+            conductivity_label = self.get_conductivity_label(conductivity_col)
 
             ax.set_xticks(x_values)
             ax.set_xticklabels(
@@ -325,72 +265,78 @@ class AnalysisPlotter:
             )
 
             if normalize:
-                ylabel = "Normalized " + conductivity_label + r" conductivity"
+                ylabel = "Normalized " + conductivity_label + " conductivity"
                 output_prefix = "normalized_"
             else:
-                ylabel = conductivity_label + r" conductivity ($\mathrm{S.cm^{-1}}$)"
+                ylabel = (
+                    conductivity_label
+                    + r" conductivity ($\mathrm{S.cm^{-1}}$)"
+                )
                 output_prefix = ""
 
             ax.set_ylabel(ylabel, fontsize=14)
 
             ax.set_title(
-                rf"{experiment_name} | {circuit_name} | {conductivity_label} conductivity",
+                rf"{experiment.name} | {circuit_name} | "
+                rf"{conductivity_label} conductivity",
                 fontsize=14,
             )
 
             ax.autoscale(axis="y")
             ax.margins(y=0.15)
 
-            if y_lim is not None and len(y_lim) == 2:
-                if y_lim != [None, None]:
-                    ax.set_ylim(*y_lim)
+            self._apply_y_limits(ax, y_lim)
 
-            output_suffix = get_output_suffix(conductivity_col)
+            output_suffix = self.get_conductivity_output_suffix(conductivity_col)
 
             figure_saver.save(
                 save_path=save_root
-                / f"{experiment_name}_{circuit_name}_{output_prefix}{output_suffix}_all_samples",
+                / (
+                    f"{experiment.name}_{circuit_name}_"
+                    f"{output_prefix}{output_suffix}_all_samples"
+                ),
                 fig=fig,
                 axes={ax},
-                dpi=dpi,
+                dpi=experiment.save_preferences.get("dpi", 300),
             )
 
     def plot_parameter_bars(
         self,
-        parameters_csv,
+        experiment,
+        df,
         circuit_name,
         sample,
         left_columns,
-        left_axis_label,
-        figure_name,
-        mapping,
-        save_root,
+        right_columns,
+        right_axis_label,
         figure_saver,
-        right_columns=None,
-        right_axis_label=None,
-        left_ylim=None,
-        right_ylim=None,
-        show_alpha=True,
-        dpi=300,
+        figure_name="R_and_Q",
     ):
         """
-        Plot one bar-chart figure for one sample and one circuit.
+        Plot one R/Q or R/C bar-chart figure for one sample and one circuit.
+
+        Settings are read from:
+
+            experiment.plotting["R_and_Q"]
         """
 
-        save_folder = save_root / sample / circuit_name
+        r_and_q_config = experiment.plotting.get("R_and_Q", {})
 
+        left_ylim = r_and_q_config.get("left_ylim", None)
+        right_ylim = r_and_q_config.get("right_ylim", None)
+
+        save_folder = experiment.paths.plots / sample / circuit_name
         save_folder.mkdir(parents=True, exist_ok=True)
 
-        df = pd.read_csv(parameters_csv)
-        df = self._clean_numeric_dataframe(df)
-
-        df_sample = df[df["sample"] == sample]
+        df_sample = df[df["sample"].astype(str) == str(sample)]
 
         if df_sample.empty:
-            print(f"Sample '{sample}' not found in {parameters_csv.name}")
+            print(f"Sample '{sample}' not found in parameter table.")
             return
 
         row = df_sample.iloc[0]
+
+        mapping = self.circuits[circuit_name]["mapping"]
 
         display_mapping = {
             info["name"]: {
@@ -405,7 +351,7 @@ class AnalysisPlotter:
             columns=df.columns,
             selected_columns=left_columns,
             display_mapping=display_mapping,
-            show_alpha=show_alpha,
+            show_alpha=True,
         )
 
         right_data = self._collect_axis_data(
@@ -413,8 +359,19 @@ class AnalysisPlotter:
             columns=df.columns,
             selected_columns=right_columns,
             display_mapping=display_mapping,
-            show_alpha=show_alpha,
+            show_alpha=True,
         )
+
+        if not left_data and not right_data:
+            print(
+                "\n"
+                + "\033[93m"
+                + "\033[1m"
+                + ":/"
+                + "\033[0m"
+                + f"  No plottable parameters for {sample} | {circuit_name}"
+            )
+            return
 
         fig, ax_left = plt.subplots(figsize=(8, 5))
         ax_right = ax_left.twinx() if right_data else None
@@ -472,18 +429,16 @@ class AnalysisPlotter:
             fontweight="bold",
         )
 
-        ax_left.set_ylabel(left_axis_label, fontsize=16)
+        ax_left.set_ylabel(r"Resistance ($\Omega$)", fontsize=16)
         ax_left.set_yscale("log")
 
-        if left_ylim is not None:
-            ax_left.set_ylim(*left_ylim)
+        self._apply_y_limits(ax_left, left_ylim)
 
         if ax_right is not None:
             ax_right.set_ylabel(right_axis_label, fontsize=16)
             ax_right.set_yscale("log")
 
-            if right_ylim is not None:
-                ax_right.set_ylim(*right_ylim)
+            self._apply_y_limits(ax_right, right_ylim)
 
         ax_left.set_title(f"{sample} | {circuit_name}")
 
@@ -496,8 +451,42 @@ class AnalysisPlotter:
             save_path=save_folder / f"{sample}_{circuit_name}_{figure_name}",
             fig=fig,
             axes=axes,
-            dpi=dpi,
+            dpi=experiment.save_preferences.get("dpi", 300),
         )
+
+    @staticmethod
+    def get_conductivity_label(conductivity_col):
+        """
+        Convert conductivity_S_cm_R_i -> sigma_i.
+        Convert conductivity_S_cm_R_bulk -> sigma_bulk.
+        """
+
+        resistance_name = conductivity_col.replace(
+            "conductivity_S_cm_",
+            "",
+        )
+
+        if resistance_name.startswith("R_"):
+            suffix = resistance_name.replace("R_", "")
+            return rf"$\sigma_{{\mathrm{{{suffix}}}}}$"
+
+        return rf"$\sigma_{{\mathrm{{{resistance_name}}}}}$"
+
+    @staticmethod
+    def get_conductivity_output_suffix(conductivity_col):
+        """
+        Convert conductivity_S_cm_R_i -> Ri_conductivity.
+        Convert conductivity_S_cm_R_bulk -> Rbulk_conductivity.
+        """
+
+        resistance_name = conductivity_col.replace(
+            "conductivity_S_cm_",
+            "",
+        )
+
+        safe_name = resistance_name.replace("_", "")
+
+        return f"{safe_name}_conductivity"
 
     def get_parameter_style(self, param, display_mapping):
         """
@@ -522,20 +511,21 @@ class AnalysisPlotter:
         colour = style.get("colour", "gray")
         order = style.get("order", float("inf"))
 
+        if is_derived:
+            colour = self.lighten_colour(colour, factor=0.2)
+
         return order, colour
 
     @staticmethod
-    def get_element_columns(parameters_csv, first_chars):
+    def get_element_columns(df, first_chars):
         """
         Return fitted/derived parameter columns starting with first_chars.
 
         Excludes:
+        - metadata/status columns
         - standard deviation columns
         - percent error columns
-        - metadata/status columns
         """
-
-        df = pd.read_csv(parameters_csv)
 
         excluded = {
             "sample",
@@ -544,19 +534,19 @@ class AnalysisPlotter:
             "fit_success",
             "fit_status",
             "covariance_warning",
+            "chi_square",
+            "reduced_chi_square",
             "error",
         }
 
-        matching_columns = {
+        return [
             col
             for col in df.columns
             if col.startswith(first_chars)
             and not col.startswith("SD_")
             and not col.endswith("_percent_error")
             and col not in excluded
-        }
-
-        return matching_columns
+        ]
 
     @staticmethod
     def get_associated_alpha(param):
@@ -573,6 +563,11 @@ class AnalysisPlotter:
         return None
 
     @staticmethod
+    def _read_parameters_csv(parameters_csv):
+        df = pd.read_csv(parameters_csv)
+        return AnalysisPlotter._clean_numeric_dataframe(df)
+
+    @staticmethod
     def _clean_numeric_dataframe(df):
         """
         Replace +/- inf by NaN for all numeric columns.
@@ -586,6 +581,17 @@ class AnalysisPlotter:
         )
 
         return df
+
+    def _get_successful_sample_names(self, df):
+        if "sample" not in df.columns:
+            return []
+
+        valid = df["sample"].astype(str).str.upper() != "MEAN"
+
+        if "fit_success" in df.columns:
+            valid &= df["fit_success"].apply(self._is_truthy)
+
+        return df.loc[valid, "sample"].astype(str).tolist()
 
     def _collect_axis_data(
         self,
@@ -625,32 +631,11 @@ class AnalysisPlotter:
                 display_mapping,
             )
 
-            alpha_label = None
-            alpha_col = self.get_associated_alpha(param)
-
-            if show_alpha and alpha_col is not None and alpha_col in row.index:
-                alpha_value = self._finite_or_none(row.get(alpha_col, np.nan))
-
-                if alpha_value is not None:
-                    sd_alpha_col = f"SD_{alpha_col}"
-                    sd_alpha = None
-
-                    if sd_alpha_col in row.index:
-                        sd_alpha = self._finite_non_negative_or_none(
-                            row.get(sd_alpha_col, np.nan)
-                        )
-
-                    if sd_alpha is not None:
-                        alpha_label = (
-                            rf"$\boldsymbol{{\alpha}}$="
-                            f"{alpha_value:.3f}"
-                            "\n"
-                            rf"$\boldsymbol{{\pm}}$"
-                            f"{sd_alpha:.3f}"
-                        )
-
-                    else:
-                        alpha_label = rf"$\boldsymbol{{\alpha}}$=" f"{alpha_value:.3f}"
+            alpha_label = self._get_alpha_label(
+                row=row,
+                param=param,
+                show_alpha=show_alpha,
+            )
 
             axis_data.append(
                 (
@@ -666,6 +651,39 @@ class AnalysisPlotter:
         axis_data.sort(key=lambda x: x[0])
 
         return axis_data
+
+    def _get_alpha_label(self, row, param, show_alpha):
+        if not show_alpha:
+            return None
+
+        alpha_col = self.get_associated_alpha(param)
+
+        if alpha_col is None or alpha_col not in row.index:
+            return None
+
+        alpha_value = self._finite_or_none(row.get(alpha_col, np.nan))
+
+        if alpha_value is None:
+            return None
+
+        sd_alpha_col = f"SD_{alpha_col}"
+        sd_alpha = None
+
+        if sd_alpha_col in row.index:
+            sd_alpha = self._finite_non_negative_or_none(
+                row.get(sd_alpha_col, np.nan)
+            )
+
+        if sd_alpha is not None:
+            return (
+                rf"$\boldsymbol{{\alpha}}$="
+                f"{alpha_value:.3f}"
+                "\n"
+                rf"$\boldsymbol{{\pm}}$"
+                f"{sd_alpha:.3f}"
+            )
+
+        return rf"$\boldsymbol{{\alpha}}$=" f"{alpha_value:.3f}"
 
     @staticmethod
     def _unpack_axis_data(axis_data):
@@ -711,11 +729,11 @@ class AnalysisPlotter:
             if not np.isfinite(value):
                 continue
 
-            kwargs = {}
+            bar_kwargs = {}
 
             if error is not None and np.isfinite(error) and error >= 0:
-                kwargs["yerr"] = error
-                kwargs["capsize"] = 5
+                bar_kwargs["yerr"] = error
+                bar_kwargs["capsize"] = 5
 
             ax.bar(
                 xpos,
@@ -726,7 +744,7 @@ class AnalysisPlotter:
                 edgecolor="black",
                 linewidth=1.2,
                 label=param,
-                **kwargs,
+                **bar_kwargs,
             )
 
             if alpha_label is not None:
@@ -745,6 +763,38 @@ class AnalysisPlotter:
                     color=colour,
                     fontweight="bold",
                 )
+
+    @staticmethod
+    def _apply_y_limits(ax, y_lim):
+        if y_lim is None:
+            return
+
+        if len(y_lim) != 2:
+            return
+
+        if y_lim == [None, None]:
+            return
+
+        ax.set_ylim(*y_lim)
+
+    @staticmethod
+    def _is_truthy(value):
+        if pd.isna(value):
+            return False
+
+        if isinstance(value, (bool, np.bool_)):
+            return bool(value)
+
+        if isinstance(value, (int, float, np.integer, np.floating)):
+            return value == 1
+
+        return str(value).strip().lower() in {
+            "true",
+            "1",
+            "yes",
+            "y",
+            "success",
+        }
 
     @staticmethod
     def _finite_or_none(value):
@@ -787,3 +837,19 @@ class AnalysisPlotter:
             return None
 
         return value
+
+    @staticmethod
+    def lighten_colour(colour, factor=0.2):
+        """
+        Lighten a matplotlib-compatible colour.
+
+        factor = 0 keeps the original colour.
+        factor = 1 gives white.
+        """
+
+        import matplotlib.colors as mcolors
+
+        rgb = np.asarray(mcolors.to_rgb(colour))
+        white = np.asarray([1.0, 1.0, 1.0])
+
+        return rgb + factor * (white - rgb)
