@@ -128,17 +128,18 @@ class ConfigLoader:
 
             # Global execution parameters
             "run": self.global_config.get("run", {}),
+            "outlier_removal" : self.global_config.get("outlier_removal", {}),
             "validation" : self.global_config.get("validation", {}),
-            "save_preferences": self.global_config.get("save_preferences", {}),
             "plotting": self.global_config.get("plotting", {}),
-    
+            "save_preferences": self.global_config.get("save_preferences", {}),
+
+            "full_terminal" : self.global_config.get("full_terminal", True),
 
             # Keep original blocks available if needed
             "metadata": metadata,
             "method_config": method_config,
             "global_config": self.global_config,
 
-            "full_terminal" : self.global_config.get("full_terminal", True)
         }
 
         return config

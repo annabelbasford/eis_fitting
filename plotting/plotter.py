@@ -151,7 +151,6 @@ class EISPlotter:
                     lin_kk_save_folder = (
                             experiment.paths.plots
                             / sample_name
-                            / "lin_KK_validation"
                         )
                     fit_plotter.plot_lin_kk(
                             sample=sample_name,

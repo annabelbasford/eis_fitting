@@ -79,7 +79,7 @@ class EISPipeline:
 
         # --------------- Pre-plot / manual-cleaning mode --------------- #
 
-        if run_parameters.get("pre_plot", False) and not experiment.paths.fits.is_dir():
+        if run_parameters.get("pre_plot", False) :
             PreprocessPlotter().plot_folder(
                 input_folder=experiment.paths.csv,
                 output_folder=experiment.paths.pre_plots,
@@ -102,6 +102,7 @@ class EISPipeline:
 
                 all_fit_data = EISFitter(self.circuits).run(
                     experiment,
+                    full_terminal = self.full_terminal
                 )
 
             else:

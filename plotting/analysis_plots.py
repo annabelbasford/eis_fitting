@@ -60,7 +60,7 @@ class AnalysisPlotter:
                 right_columns = capacitance_columns
                 right_axis_label = r"Capacitance ($F$)"
 
-            r_and_q_limits = self.plotting.get("R_and_Q",{})
+            r_and_q_limits = self.plotting.get("R_and_Q", {})
 
             conductivities_limits = self.plotting.get("conductivities", {})
 
@@ -94,63 +94,63 @@ class AnalysisPlotter:
                     dpi=experiment.save_preferences.get("dpi", 300),
                 )
 
-            conductivities_parameters = experiment.plotting["conductivities"] 
+            conductivities_parameters = experiment.plotting["conductivities"]
             # One experiment-level R_i conductivity chart
             self.plot_conductivities_summary(
+                experiment=experiment,
                 parameters_csv=parameters_csv,
-                circuit_name=circuit_name,
-                experiment_name=experiment.name,
-                save_root=experiment.paths.plots,
                 figure_saver=figure_saver,
-                y_lim=conductivities_limits.get("left_ylim"),
-                cmap_name=conductivities_parameters.get("cmap_name", "viridis"),
-                log_scale=conductivities_parameters.get("log_scale", True),
-                dpi=experiment.save_preferences.get("dpi", 300),
-                normalize=conductivities_parameters.get("normalize", False),
+                circuit_name=circuit_name,
             )
 
     def plot_conductivities_summary(
         self,
+        experiment,
         parameters_csv,
         circuit_name,
-        experiment_name,
-        save_root,
         figure_saver,
-        y_lim=None,
-        cmap_name="viridis",
-        log_scale=True,
         dpi=300,
-        normalize=False,
     ):
         """
         Plot one experiment-level conductivity summary per conductivity type.
 
-        One saved image per conductivity column.
+        Settings are read from:
 
-        Conductivity columns are detected directly from the parameters CSV.
+            experiment.plotting["conductivities"]
 
-        Expected columns:
-            sample
-            conductivity_S_cm_<resistance_name>
-            SD_conductivity_S_cm_<resistance_name>
+        Expected global.json structure:
 
-        Example:
-            conductivity_S_cm_R_i
-            SD_conductivity_S_cm_R_i
-
-            conductivity_S_cm_R_bulk
-            SD_conductivity_S_cm_R_bulk
-
-        Saved in:
-            exp/fits/plots/
+            "plotting": {
+                "conductivities": {
+                    "left_ylim": [null, null],
+                    "normalize": true,
+                    "cmap_name": "viridis",
+                    "log_scale": false,
+                    "legend": {
+                        "rotation": 0,
+                        "ha": "center",
+                        "fontsize": 14
+                    }
+                }
+            }
         """
 
-        def get_conductivity_label(conductivity_col):
-            """
-            Convert conductivity_S_cm_R_i -> sigma_i
-            Convert conductivity_S_cm_R_bulk -> sigma_bulk
-            """
+        conductivity_config = experiment.plotting.get("conductivities", {})
 
+        y_lim = conductivity_config.get("left_ylim", [None, None])
+        normalize = conductivity_config.get("normalize", False)
+        cmap_name = conductivity_config.get("cmap_name", "viridis")
+        log_scale = conductivity_config.get("log_scale", False)
+
+        label_config = conductivity_config.get("legend", {})
+        label_rotation = label_config.get("rotation", 0)
+        label_ha = label_config.get("ha", "center")
+        label_fontsize = label_config.get("fontsize", 14)
+
+        experiment_name = experiment.name
+        save_root = experiment.paths.plots
+
+        def get_conductivity_label(conductivity_col):
             resistance_name = conductivity_col.replace(
                 "conductivity_S_cm_",
                 "",
@@ -163,18 +163,12 @@ class AnalysisPlotter:
             return rf"$\sigma_{{\mathrm{{{resistance_name}}}}}$"
 
         def get_output_suffix(conductivity_col):
-            """
-            Convert conductivity_S_cm_R_i -> Ri_conductivity
-            Convert conductivity_S_cm_R_bulk -> Rbulk_conductivity
-            """
-
             resistance_name = conductivity_col.replace(
                 "conductivity_S_cm_",
                 "",
             )
 
             safe_name = resistance_name.replace("_", "")
-
             return f"{safe_name}_conductivity"
 
         df = pd.read_csv(parameters_csv)
@@ -194,7 +188,9 @@ class AnalysisPlotter:
         conductivity_columns = [
             col
             for col in df.columns
-            if col.startswith("conductivity_S_cm_") and not col.startswith("SD_")
+            if col.startswith("conductivity_S_cm_")
+            and not col.startswith("SD_")
+            and not col.endswith("_percent_error")
         ]
 
         if not conductivity_columns:
@@ -211,10 +207,6 @@ class AnalysisPlotter:
         save_root.mkdir(parents=True, exist_ok=True)
 
         for conductivity_col in conductivity_columns:
-
-            if conductivity_col.endswith("_percent_error"):
-                continue
-
             sd_col = f"SD_{conductivity_col}"
 
             values = pd.to_numeric(
@@ -267,6 +259,23 @@ class AnalysisPlotter:
             conductivities = plot_df[conductivity_col].to_numpy(dtype=float)
             errors = plot_df[sd_col].to_numpy(dtype=float)
 
+            if normalize:
+                reference_value = np.nanmax(conductivities)
+
+                if np.isfinite(reference_value) and reference_value > 0:
+                    conductivities = conductivities / reference_value
+                    errors = errors / reference_value
+                else:
+                    print(
+                        "\n"
+                        + "\033[93m"
+                        + "\033[1m"
+                        + ":/"
+                        + "\033[0m"
+                        + f"  Could not normalize {conductivity_col}: invalid reference value"
+                    )
+                    continue
+
             x_values = np.arange(len(samples))
 
             cmap = plt.get_cmap(cmap_name)
@@ -287,11 +296,12 @@ class AnalysisPlotter:
                 if not np.isfinite(conductivity) or conductivity <= 0:
                     continue
 
-                kwargs = {}
+                bar_kwargs = {}
 
-                if np.isfinite(error) and error >= 0 and conductivity - error > 0:
-                    kwargs["yerr"] = error
-                    kwargs["capsize"] = 5
+                if np.isfinite(error) and error >= 0:
+                    if not log_scale or conductivity - error > 0:
+                        bar_kwargs["yerr"] = error
+                        bar_kwargs["capsize"] = 5
 
                 ax.bar(
                     xpos,
@@ -301,7 +311,7 @@ class AnalysisPlotter:
                     color=colour,
                     edgecolor="black",
                     linewidth=1.2,
-                    **kwargs,
+                    **bar_kwargs,
                 )
 
             conductivity_label = get_conductivity_label(conductivity_col)
@@ -309,37 +319,37 @@ class AnalysisPlotter:
             ax.set_xticks(x_values)
             ax.set_xticklabels(
                 samples,
-                rotation=0,
-                ha="center",
-                fontsize=14,
+                rotation=label_rotation,
+                ha=label_ha,
+                fontsize=label_fontsize,
             )
 
-            norm_label = "Normalized " if normalize else ""
-            ax.set_ylabel(
-                norm_label
-                + conductivity_label
-                + r" conductivity ($\mathrm{S.cm^{-1}}$)",
-                fontsize=14,
-            )
+            if normalize:
+                ylabel = "Normalized " + conductivity_label + r" conductivity"
+                output_prefix = "normalized_"
+            else:
+                ylabel = conductivity_label + r" conductivity ($\mathrm{S.cm^{-1}}$)"
+                output_prefix = ""
+
+            ax.set_ylabel(ylabel, fontsize=14)
 
             ax.set_title(
                 rf"{experiment_name} | {circuit_name} | {conductivity_label} conductivity",
                 fontsize=14,
             )
-        
+
             ax.autoscale(axis="y")
             ax.margins(y=0.15)
 
-            if y_lim is not None:
-                ax.set_ylim(*y_lim)
+            if y_lim is not None and len(y_lim) == 2:
+                if y_lim != [None, None]:
+                    ax.set_ylim(*y_lim)
 
             output_suffix = get_output_suffix(conductivity_col)
 
-            norm_label = "normalized_" if normalize else ""
-
             figure_saver.save(
                 save_path=save_root
-                / f"{experiment_name}_{circuit_name}_{norm_label}{output_suffix}_all_samples",
+                / f"{experiment_name}_{circuit_name}_{output_prefix}{output_suffix}_all_samples",
                 fig=fig,
                 axes={ax},
                 dpi=dpi,

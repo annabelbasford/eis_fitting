@@ -61,13 +61,12 @@ class Experiment:
         
         self.path = path
         self.config = config
-        self.data_path = data_path
 
         self.name = path.name
         self.description = config.get("description", "")
 
-        self.method = config.get("method",{})
-        self.circuits = config.get("circuits",{})
+        self.method = config.get("method", "")
+        self.circuits = config.get("circuits", [])
 
         self.geometry = config.get("geometry", {})
         self.run = config.get("run",{})

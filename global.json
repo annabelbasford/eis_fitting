@@ -35,7 +35,7 @@
             "fit_type": "complex",
             "add_cap": true
         },
-        "error_percent_param_threshold" : 500
+        "error_percent_param_threshold": 200
     },
     "plotting": {
         "R_and_Q": {
@@ -55,7 +55,12 @@
             ],
             "normalize": true,
             "cmap_name": "viridis",
-            "log_scale": false
+            "log_scale": false,
+            "legend": {
+                "rotation": 0,
+                "ha": "center",
+                "fontsize": 14
+            }
         }
     },
     "save_preferences": {

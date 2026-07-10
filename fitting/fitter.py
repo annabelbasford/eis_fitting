@@ -2,6 +2,7 @@ import shutil
 
 import pandas as pd
 import numpy as np
+from scipy.stats import mstats
 from impedance.models.circuits import CustomCircuit
 
 import warnings
@@ -37,7 +38,7 @@ class EISFitter:
             "fitting_frequency_range", [None, None]
         )
 
-        if full_terminal and fitting_frequency_range is not [None, None]:
+        if full_terminal and fitting_frequency_range is not None:
             print(
                 f"\nUsing fitting frequency range: "
                 f"{fitting_frequency_range[0]} Hz to {fitting_frequency_range[1]} Hz"
@@ -55,17 +56,13 @@ class EISFitter:
 
             freq, z = self.reader.read_impedance(csv_path)
 
-            n_points_before_outlier_removal = len(freq)
-
-            freq, z = self._remove_quantile_outliers(
+            freq, z, outlier_info = self._remove_quantile_outliers(
                 freq=freq,
                 z=z,
                 outlier_config=experiment.outlier_removal,
                 sample_name=sample_name,
                 full_terminal=full_terminal,
             )
-
-            n_points_after_outlier_removal = len(freq)
 
             try:
                 freq, z = self._apply_fitting_frequency_range(
@@ -93,7 +90,7 @@ class EISFitter:
                     z=z,
                     validation_parameters=experiment.validation,
                     full_terminal=full_terminal,
-                    n_outliers_removed=n_points_before_outlier_removal-n_points_after_outlier_removal
+                    outlier_info=outlier_info
                 )
 
                 all_results.append(result["row"])
@@ -104,12 +101,9 @@ class EISFitter:
                         "Z": z,
                         "Z_fit": result["z_fit"],
                         "lin_kk": result.get("lin_kk", {}),
-                        "n_outliers_removed": (
-                            n_points_before_outlier_removal
-                            - n_points_after_outlier_removal
-                            if n_points_before_outlier_removal is not None
-                            and n_points_after_outlier_removal is not None
-                            else np.nan
+                        "n_outliers_removed": outlier_info.get(
+                            "n_outliers_removed",
+                            np.nan,
                         ),
                     }
 
@@ -131,11 +125,18 @@ class EISFitter:
         z,
         validation_parameters=None,
         full_terminal=True,
-        n_outliers_removed=None,
+        outlier_info=None,
     ):
 
         if validation_parameters is None:
             validation_parameters = {}
+
+        if outlier_info is None:
+            outlier_info = {
+                "n_points_before_outlier_removal": np.nan,
+                "n_points_after_outlier_removal": np.nan,
+                "n_outliers_removed": np.nan,
+            }
 
         lin_kk_result = {}
         lin_kk_config = validation_parameters.get("lin_kk", {})
@@ -168,6 +169,9 @@ class EISFitter:
                 initial_guess=initial_guess,
                 name=circuit_name,
             )
+
+            error_percent_param_threshold=validation_parameters.get("error_percent_param_threshold", 100)
+
 
             with warnings.catch_warnings():
                 warnings.filterwarnings(
@@ -207,7 +211,10 @@ class EISFitter:
                 "lin_kk_error": lin_kk_result.get("lin_kk_error", ""),
                 "lin_kk_M": lin_kk_result.get("lin_kk_M", np.nan),
                 "lin_kk_mu": lin_kk_result.get("lin_kk_mu", np.nan),
-                "n_outliers_removed" : n_outliers_removed,
+                "n_outliers_removed": outlier_info.get(
+                    "n_outliers_removed",
+                    np.nan,
+                ),
             }
 
             for name, value in zip(mapped_names, circuit.parameters_):
@@ -230,7 +237,7 @@ class EISFitter:
 
                     row[f"{name}_percent_error"] = percent_error
 
-                    if percent_error > 500:
+                    if percent_error > error_percent_param_threshold:
                         bad_parameters.append(f"{name}: {percent_error:.1f}%")
 
             else:
@@ -240,7 +247,7 @@ class EISFitter:
 
             if bad_parameters:
                 raise RuntimeError(
-                    "Fit rejected: parameter uncertainty above 500% for "
+                    f"Fit rejected: parameter uncertainty above {error_percent_param_threshold}% for "
                     + ", ".join(bad_parameters)
                 )
 
@@ -276,6 +283,18 @@ class EISFitter:
                     ),
                     "lin_kk_mean_abs_residual_percent": lin_kk_result.get(
                         "lin_kk_mean_abs_residual_percent",
+                        np.nan,
+                    ),
+                    "n_points_before_outlier_removal": outlier_info.get(
+                        "n_points_before_outlier_removal",
+                        np.nan,
+                    ),
+                    "n_points_after_outlier_removal": outlier_info.get(
+                        "n_points_after_outlier_removal",
+                        np.nan,
+                    ),
+                    "n_outliers_removed": outlier_info.get(
+                        "n_outliers_removed",
                         np.nan,
                     ),
                 },
@@ -400,53 +419,6 @@ class EISFitter:
                 parameter_columns.append(display_name)
 
         return parameter_columns
-
-    def _get_fitting_frequency_range(self, experiment):
-        """
-        Return fitting frequency range from experiment.run.
-
-        Expected format:
-            None
-            [f_min, f_max]
-            [f_min, None]
-            [None, f_max]
-
-        Frequencies are in Hz.
-        """
-
-        frequency_range = experiment.run.get("fitting_frequency_range", None)
-
-        if frequency_range is None:
-            return None
-
-        if len(frequency_range) != 2:
-            raise ValueError(
-                "\033[91m"
-                + "\033[1m"
-                + "/!\\"
-                + "\033[0m"
-                + "fitting_frequency_range must be None or [f_min, f_max]"
-            )
-
-        f_min, f_max = frequency_range
-
-        if f_min is not None:
-            f_min = float(f_min)
-
-        if f_max is not None:
-            f_max = float(f_max)
-
-        if f_min is not None and f_max is not None and f_min >= f_max:
-            raise ValueError(
-                "\033[91m"
-                + "\033[1m"
-                + "/!\\"
-                + "\033[0m"
-                + f"Invalid fitting_frequency_range: {frequency_range}. "
-                "Expected f_min < f_max."
-            )
-
-        return f_min, f_max
 
     def _apply_fitting_frequency_range(
         self,
@@ -681,9 +653,10 @@ class EISFitter:
         """
 
         if not outlier_config.get("enabled", False):
-            return freq, z
-
-        from scipy.stats import mstats
+            print(outlier_config)
+            return freq, z, {
+                "n_outliers_removed": 0,
+            }
 
         threshold = float(outlier_config.get("threshold", 1.5))
         features = outlier_config.get(
@@ -743,13 +716,29 @@ class EISFitter:
 
             keep &= feature_keep
 
-        n_removed = int(np.sum(valid) - np.sum(keep))
+        n_points_before = int(len(freq))
+        n_points_valid = int(np.sum(valid))
+        n_points_after = int(np.sum(keep))
 
-        if full_terminal and n_removed > 0:
+        n_invalid_removed = n_points_before - n_points_valid
+        n_quantile_outliers_removed = n_points_valid - n_points_after
+        n_total_removed = n_points_before - n_points_after
+
+        if full_terminal and n_total_removed > 0:
             prefix = f"{sample_name}: " if sample_name else ""
             print(
-                f"{prefix}removed {n_removed} outlier point(s) "
-                f"using quantile/IQR threshold={threshold}"
+                f"{prefix}removed {n_total_removed} point(s) "
+                f"({n_invalid_removed} invalid, "
+                f"{n_quantile_outliers_removed} quantile/IQR outlier(s)) "
+                f"using threshold={threshold}"
             )
 
-        return freq[keep], z[keep]
+        
+
+        return freq[keep], z[keep], {
+            "n_points_before_outlier_removal": n_points_before,
+            "n_points_after_outlier_removal": n_points_after,
+            "n_invalid_points_removed": n_invalid_removed,
+            "n_quantile_outliers_removed": n_quantile_outliers_removed,
+            "n_outliers_removed": n_total_removed,
+        }
