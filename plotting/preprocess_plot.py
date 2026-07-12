@@ -2,7 +2,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
+from ..utils import FigureSaver
+
 class PreprocessPlotter:
+    def __init__(self, save_preferences):
+        self.save_preferences = save_preferences
+        
     def plot_folder(self, input_folder: Path, output_folder: Path) -> None:
         output_folder.mkdir(parents=True, exist_ok=True)
 
@@ -38,5 +43,5 @@ class PreprocessPlotter:
         out_file = output_folder / f"{input_file.stem}.png"
 
         fig.tight_layout()
-        fig.savefig(out_file, dpi=300)
+        FigureSaver(self.save_preferences).save(save_path=out_file, fig=fig, axes ={ax})
         plt.close(fig)

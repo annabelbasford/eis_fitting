@@ -1,13 +1,13 @@
 {
     "paths": {
         "data_path": "/home/enzos/data/",
-        "user": "enzo",
-        "project": "test",
+        "user": "dryshia",
+        "project": "EIS_hydrogels",
         "output_mode": "workspace",
         "output_path": "/home/enzos/data_processed"
     },
     "run": {
-        "pre_plot": false,
+        "pre_plot": true,
         "plot": true,
         "compute_mean_parameters": false
     },
@@ -20,9 +20,9 @@
         ]
     },
     "validation": {
-        "display_chi_square": true,
+        "display_chi_square": false,
         "fitting_frequency_range": [
-            10,
+            null,
             1e6
         ],
         "plot_residuals": true,
@@ -64,10 +64,10 @@
         }
     },
     "save_preferences": {
-        "transparent": false,
+        "transparent": true,
         "png": true,
         "svg": false,
-        "dpi": 250
+        "dpi": 450
     },
     "full_terminal": true
 }

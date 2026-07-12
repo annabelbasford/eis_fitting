@@ -6,10 +6,11 @@ class FigureSaver:
     def __init__(self, save_preferences: dict):
         self.save_preferences = save_preferences
 
-    def save(self, save_path, fig, axes, dpi):
+    def save(self, save_path, fig, axes):
         save_to_png = self.save_preferences.get("png", True)
         save_to_svg = self.save_preferences.get("svg", False)
         transparent = self.save_preferences.get("transparent", False)
+        dpi = self.save_preferences.get("dpi", 250)
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="Tight layout not applied.*")

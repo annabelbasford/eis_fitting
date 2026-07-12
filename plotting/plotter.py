@@ -128,7 +128,6 @@ class EISPlotter:
                     ),
                     chi_square=chi_square,
                     reduced_chi_square=reduced_chi_square,
-                    dpi=dpi,
                 )
 
                 fit_plotter.plot_bode(
@@ -141,7 +140,6 @@ class EISPlotter:
                     ),
                     chi_square=chi_square,
                     reduced_chi_square=reduced_chi_square,
-                    dpi=dpi,
                 )
             
                 lin_kk_config = validation_parameters.get("lin_kk", {})
@@ -156,7 +154,6 @@ class EISPlotter:
                             sample=sample_name,
                             lin_kk_result=data.get("lin_kk"),
                             save_folder=lin_kk_save_folder,
-                            dpi=dpi
                         )
 
 
@@ -173,7 +170,6 @@ class EISPlotter:
                         ),
                         chi_square=chi_square,
                         reduced_chi_square=reduced_chi_square,
-                        dpi=experiment.save_preferences.get("dpi", 300),
                     )
 
 
@@ -202,7 +198,6 @@ class EISPlotter:
                 fit_data_dict=fit_data_dict,
                 circuit_name=circuit_name,
                 save_folder=all_runs_folder,
-                dpi=experiment.save_preferences.get("dpi", 300),
             )
 
     def plot_analysis_results(self, experiment) -> None:

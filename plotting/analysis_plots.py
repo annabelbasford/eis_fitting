@@ -297,7 +297,6 @@ class AnalysisPlotter:
                 ),
                 fig=fig,
                 axes={ax},
-                dpi=experiment.save_preferences.get("dpi", 300),
             )
 
     def plot_parameter_bars(
@@ -451,7 +450,6 @@ class AnalysisPlotter:
             save_path=save_folder / f"{sample}_{circuit_name}_{figure_name}",
             fig=fig,
             axes=axes,
-            dpi=experiment.save_preferences.get("dpi", 300),
         )
 
     @staticmethod
