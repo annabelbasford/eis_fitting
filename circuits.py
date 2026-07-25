@@ -36,13 +36,13 @@ CIRCUITS = {
     "circuit_2": {
         "string": "R_1-p(R_3-CPE_1,CPE_2,R_2)",
         "guess": [
-            20,  # R_1 = R_c
-            750,  # R_3 = R_i
+            100,  # R_1 = R_c
+            100,  # R_3 = R_i
             1e-5,  # CPE_1_0 = Q_DL
-            0.9,  # CPE_1_1 = alpha_DL
+            0.6,  # CPE_1_1 = alpha_DL
             1e-4,  # CPE_2_0 = Q_g
-            0.7,  # CPE_2_1 = alpha_g
-            200,  # R_2 = R_e
+            0.6,  # CPE_2_1 = alpha_g
+            200000,  # R_2 = R_e
         ],
         "mapping": {
             "R_1": {
@@ -87,56 +87,56 @@ CIRCUITS = {
     "circuit_3": {
         "string": "p(R_1,CPE_1)-p(R_2,CPE_2)-CPE_3",
         "guess": [
-            100,  # R_1 = R_cond
-            1e-6,  # CPE_1_0 = Q_cond
-            0.9,  # CPE_1_1 = alpha_cond
-            1000,  # R_2 = R_junction
-            1e-6,  # CPE_2_0 = Q_junction
-            0.8,  # CPE_2_1 = alpha_junction
-            1e-5,  # CPE_3_0 = Q_ep
-            0.9,  # CPE_3_1 = alpha_ep
+            100,  # R_1 = R_HF
+            1e-6,  # CPE_1_0 = Q_HF
+            0.5,  # CPE_1_1 = alpha_HF
+            1500,  # R_2 = R_LF
+            1e-5,  # CPE_2_0 = Q_LF
+            0.6,  # CPE_2_1 = alpha_LF
+            1e-4,  # CPE_3_0 = Q_DL
+            0.4,  # CPE_3_1 = alpha_DL
         ],
         "mapping": {
             "R_1": {
-                "name": "R_1",
+                "name": "R_HF",
                 "colour": "#80D4F8",
                 "order": 0,
                 "compute_conductivity": True,
             },
             "CPE_1_0": {
-                "name": "Q_1",
+                "name": "Q_HF",
                 "colour": "#7C84C2",
                 "order": 0,
             },
             "CPE_1_1": {
-                "name": "alpha_1",
+                "name": "alpha_HF",
                 "colour": "#7C84C2",
                 "order": 0,
             },
             "R_2": {
-                "name": "R_2",
+                "name": "R_LF",
                 "colour": "#F37F8C",
                 "order": 1,
                 "compute_conductivity": True,
             },
             "CPE_2_0": {
-                "name": "Q_2",
-                "colour": "#B39DDB",
+                "name": "Q_LF",
+                "colour": "#9A8DD8",
                 "order": 1,
             },
             "CPE_2_1": {
-                "name": "alpha_2",
-                "colour": "#B39DDB",
+                "name": "alpha_LF",
+                "colour": "#9A8DD8",
                 "order": 1,
             },
             "CPE_3_0": {
-                "name": "Q_ep",
-                "colour": "#9BD3A8",
+                "name": "Q_EP",
+                "colour": "#9AD3A6",
                 "order": 2,
             },
             "CPE_3_1": {
-                "name": "alpha_ep",
-                "colour": "#9BD3A8",
+                "name": "alpha_EP",
+                "colour": "#9AD3A6",
                 "order": 2,
             },
         },
@@ -397,6 +397,51 @@ CIRCUITS = {
                 "name": "alpha_total",
                 "colour": "#7C84C2",
                 "order": 0,
+            },
+        },
+    },
+    "circuit_9": {
+        "string": "R_1-p(R_2,CPE_1)-CPE_2",
+        "guess": [
+            50,  # R_1
+            2000,  # R_2
+            1e-6,  # CPE_1_0
+            0.8,  # CPE_1_1
+            1e-5,  # CPE_2_0
+            0.8,  # CPE_2_1
+        ],
+        "mapping": {
+            "R_1": {
+                "name": "R_s",
+                "colour": "#B0B0B0",
+                "order": 0,
+                "compute_conductivity": False,
+            },
+            "R_2": {
+                "name": "R_i",
+                "colour": "#80D4F8",
+                "order": 1,
+                "compute_conductivity": True,
+            },
+            "CPE_1_0": {
+                "name": "Q_i",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+            "CPE_1_1": {
+                "name": "alpha_i",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+            "CPE_2_0": {
+                "name": "Q_EP",
+                "colour": "#F37F8C",
+                "order": 1,
+            },
+            "CPE_2_1": {
+                "name": "alpha_EP",
+                "colour": "#F37F8C",
+                "order": 1,
             },
         },
     },

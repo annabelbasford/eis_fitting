@@ -35,10 +35,10 @@ class EISFitter:
         }
 
         fitting_frequency_range = experiment.validation.get(
-            "fitting_frequency_range", [None, None]
+            "fitting_frequency_range", None
         )
 
-        if full_terminal and fitting_frequency_range is not None:
+        if full_terminal and (fitting_frequency_range is not None or fitting_frequency_range is not [None,None])  :
             print(
                 f"\nUsing fitting frequency range: "
                 f"{fitting_frequency_range[0]} Hz to {fitting_frequency_range[1]} Hz"
@@ -237,8 +237,9 @@ class EISFitter:
 
                     row[f"{name}_percent_error"] = percent_error
 
-                    if percent_error > error_percent_param_threshold:
-                        bad_parameters.append(f"{name}: {percent_error:.1f}%")
+                    if error_percent_param_threshold is not None:
+                        if percent_error > error_percent_param_threshold:
+                            bad_parameters.append(f"{name}: {percent_error:.1f}%")
 
             else:
                 raise RuntimeError(
@@ -653,7 +654,6 @@ class EISFitter:
         """
 
         if not outlier_config.get("enabled", False):
-            print(outlier_config)
             return freq, z, {
                 "n_outliers_removed": 0,
             }

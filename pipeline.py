@@ -94,33 +94,27 @@ class EISPipeline:
 
         # --------------- Fitting --------------- #
 
-        all_fit_data = None
+        all_fit_data = None 
 
-        if run_parameters.get("fit", True):
-
-            if not experiment.paths.fits.is_dir():
-
+        if not experiment.paths.fits.is_dir():
+            all_fit_data = EISFitter(self.circuits).run(
+                experiment,
+                full_terminal = self.full_terminal
+            )
+        else:
+            if self.full_terminal:
+                print("Fits folder already exists. Skipping fitting.")
+            all_fit_data = EISFitter(self.circuits).load_fit_data(
+                experiment=experiment,
+                validation_parameters=experiment.validation,
+            )
+            if not all_fit_data:
+                if self.full_terminal:
+                    print("No existing fit data found. Running fitting instead.")
                 all_fit_data = EISFitter(self.circuits).run(
                     experiment,
-                    full_terminal = self.full_terminal
+                    full_terminal=self.full_terminal,
                 )
-
-            else:
-                if self.full_terminal:
-                    print("Fits folder already exists. Skipping fitting.")
-                all_fit_data = EISFitter(self.circuits).load_fit_data(
-                    experiment=experiment,
-                    validation_parameters=experiment.validation,
-                )
-
-                if not all_fit_data:
-                    if self.full_terminal:
-                        print("No existing fit data found. Running fitting instead.")
-
-                    all_fit_data = EISFitter(self.circuits).run(
-                        experiment,
-                        full_terminal=self.full_terminal,
-                    )
 
         # --------------- Analysis and plotting --------------- #
 

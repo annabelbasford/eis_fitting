@@ -350,7 +350,7 @@ class FitPlotter:
         save_folder,
         chi_square=None,
         reduced_chi_square=None,
-        invert_frequency_axis=True,
+        plotting_limits=None,
     ):
         """
         Plot relative residuals for one fitted EIS spectrum.
@@ -362,6 +362,21 @@ class FitPlotter:
 
         Residuals are expressed in percent and normalised by |Z_exp|.
         """
+
+        def _apply_y_limits(ax, y_lim):
+            if y_lim is None:
+                return
+
+            if len(y_lim) != 2:
+                return
+
+            if y_lim == [None, None]:
+                return
+
+            ax.set_ylim(*y_lim)
+
+        signed_limits = plotting_limits.get("ylim_signed", {})
+        absolute_limits = plotting_limits.get("ylim_absolute", {})
 
         frequencies = np.asarray(frequencies, dtype=float)
         Z_exp = np.asarray(Z_exp, dtype=complex)
@@ -398,6 +413,7 @@ class FitPlotter:
             "o-",
             markersize=4,
             linewidth=1.2,
+            color="#75B045",
             label=r"$Z'$ residual",
         )
 
@@ -407,6 +423,7 @@ class FitPlotter:
             "s-",
             markersize=4,
             linewidth=1.2,
+            color="#D65A9F",
             label=r"$Z''$ residual",
         )
 
@@ -416,6 +433,8 @@ class FitPlotter:
             linewidth=1,
             color="black",
         )
+
+        _apply_y_limits(ax_signed, signed_limits)
 
         ax_signed.set_ylabel("Signed residual (%)", fontsize=12)
         ax_signed.legend(frameon=False)
@@ -427,6 +446,7 @@ class FitPlotter:
             "o-",
             markersize=4,
             linewidth=1.2,
+            color="#7b58df",
             label=r"$|Z|$ residual",
         )
 
@@ -437,13 +457,11 @@ class FitPlotter:
             color="black",
         )
 
+        _apply_y_limits(ax_abs, absolute_limits)
+
         ax_abs.set_xlabel("Frequency (Hz)", fontsize=12)
         ax_abs.set_ylabel("Absolute residual (%)", fontsize=12)
         ax_abs.legend(frameon=False)
-
-        if invert_frequency_axis:
-            ax_signed.invert_xaxis()
-            ax_abs.invert_xaxis()
 
         self._add_fit_statistics_box(
             ax=ax_signed,
@@ -499,7 +517,7 @@ class FitPlotter:
         lin_kk_result,
         save_folder,
     ):
-        
+
         if not lin_kk_result:
 
             return
@@ -524,14 +542,16 @@ class FitPlotter:
             freq,
             res_real,
             "o-",
-            label="Real residual",
+            label=r"$Z'$ lin-KK residual",
+            color="#75B045",
         )
 
         ax.semilogx(
             freq,
             res_imag,
             "s-",
-            label="Imaginary residual",
+            label=r"$Z''$ lin-KK residual",
+            color="#D65A9F",
         )
 
         ax.set_xlabel("Frequency (Hz)")
@@ -543,7 +563,7 @@ class FitPlotter:
             f"mu={lin_kk_result.get('lin_kk_mu'):.3f}"
         )
 
-        ax.grid(True, which="both", alpha=0.3)
+        ax.grid(False)
         ax.legend()
 
         save_path = save_folder / f"{sample}_lin_KK_residuals"
@@ -552,7 +572,6 @@ class FitPlotter:
             save_path=save_path,
             fig=fig,
             axes={ax},
-
         )
 
         plt.close(fig)

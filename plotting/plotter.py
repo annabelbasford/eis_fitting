@@ -85,7 +85,6 @@ class EISPlotter:
 
         plot_root = experiment.paths.plots
         plot_root.mkdir(parents=True, exist_ok=True)
-        
 
         for circuit_name, fit_data_dict in all_fit_data.items():
             if not fit_data_dict:
@@ -112,11 +111,10 @@ class EISPlotter:
                     chi_square = row.iloc[0]["chi_square"]
                     reduced_chi_square = row.iloc[0]["reduced_chi_square"]
 
-                
                 circuit_plot_folder.mkdir(
-                        parents=True,
-                        exist_ok=True,
-                    )
+                    parents=True,
+                    exist_ok=True,
+                )
 
                 fit_plotter.plot_nyquist(
                     freq=data["freq"],
@@ -141,21 +139,16 @@ class EISPlotter:
                     chi_square=chi_square,
                     reduced_chi_square=reduced_chi_square,
                 )
-            
+
                 lin_kk_config = validation_parameters.get("lin_kk", {})
 
-
                 if lin_kk_config.get("plot", False):
-                    lin_kk_save_folder = (
-                            experiment.paths.plots
-                            / sample_name
-                        )
+                    lin_kk_save_folder = experiment.paths.plots / sample_name
                     fit_plotter.plot_lin_kk(
-                            sample=sample_name,
-                            lin_kk_result=data.get("lin_kk"),
-                            save_folder=lin_kk_save_folder,
-                        )
-
+                        sample=sample_name,
+                        lin_kk_result=data.get("lin_kk"),
+                        save_folder=lin_kk_save_folder,
+                    )
 
                 if plot_residuals:
                     fit_plotter.plot_residuals(
@@ -170,8 +163,8 @@ class EISPlotter:
                         ),
                         chi_square=chi_square,
                         reduced_chi_square=reduced_chi_square,
+                        plotting_limits=experiment.plotting.get("residuals", None),
                     )
-
 
         self.plot_all_runs(
             experiment=experiment,
