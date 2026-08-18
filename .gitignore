@@ -17,3 +17,5 @@ venv/
 
 *.jpg
 *.pdf
+
+global.json
