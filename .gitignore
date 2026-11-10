@@ -19,3 +19,6 @@ venv/
 *.pdf
 
 global.json
+
+/data/
+/data_processed/

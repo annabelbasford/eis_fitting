@@ -24,7 +24,7 @@ class FigureSaver:
 
         if save_to_png:
             fig.savefig(
-                save_path.with_suffix(".png"),
+                save_path.parent / (save_path.name + ".png"),
                 format="png",
                 transparent=transparent,
                 dpi=dpi,
@@ -33,7 +33,7 @@ class FigureSaver:
 
         if save_to_svg:
             fig.savefig(
-                save_path.with_suffix(".svg"),
+                save_path.parent / (save_path.name + ".svg"),
                 format="svg",
                 transparent=transparent,
                 dpi=dpi,

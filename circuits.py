@@ -445,4 +445,158 @@ CIRCUITS = {
             },
         },
     },
+
+    "MIEC_R_CPE_Re": {
+        # Same topology as circuit_1 (p(R_1-CPE_1,R_2)); only the guess differs.
+        "string": "p(R_1-CPE_1,R_2)",
+        "guess": [
+            600,  # R_1 = R_i, ~R_HF (high-frequency limit is R_i || R_e ~ R_i)
+            1.5e-6,  # CPE_1_0 = Q_DL, from the 1 Hz imaginary part
+            0.9,  # CPE_1_1 = alpha_DL, from the 1 Hz phase
+            1e5,  # R_2 = R_e, ~|Z_LF|: start where chi^2 responds to R_e (not a bound)
+        ],
+        "mapping": {
+            "R_1": {
+                "name": "R_i",
+                "colour": "#80D4F8",
+                "compute_conductivity": True,
+                "order": 0,
+            },
+            "R_2": {
+                "name": "R_e",
+                "colour": "#F37F8C",
+                "compute_conductivity": True,
+                "order": 1,
+            },
+            "CPE_1_0": {
+                "name": "Q_DL",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+            "CPE_1_1": {
+                "name": "alpha_DL",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+        },
+    },
+    "Rs_MIEC": {
+        # Fig. 5d: R_s in series with p(R_i-CPE_dl, R_e).
+        "string": "R_1-p(R_2-CPE_1,R_3)",
+        "guess": [
+            100,  # R_1 = R_s (arbitrary ~1/6 split of R_HF; data cannot fix it)
+            500,  # R_2 = R_i (R_s + R_i ~ R_HF)
+            1.5e-6,  # CPE_1_0 = Q_DL
+            0.9,  # CPE_1_1 = alpha_DL
+            1e5,  # R_3 = R_e, ~|Z_LF|
+        ],
+        "mapping": {
+            "R_1": {
+                "name": "R_s",
+                "colour": "#B0B0B0",
+                "compute_conductivity": False,
+                "order": 0,
+            },
+            "R_2": {
+                "name": "R_i",
+                "colour": "#80D4F8",
+                "compute_conductivity": True,
+                "order": 1,
+            },
+            "R_3": {
+                "name": "R_e",
+                "colour": "#F37F8C",
+                "compute_conductivity": True,
+                "order": 2,
+            },
+            "CPE_1_0": {
+                "name": "Q_DL",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+            "CPE_1_1": {
+                "name": "alpha_DL",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+        },
+    },
+    "Randles_Cdl_W": {
+        # Fig. 5c as drawn: ideal C_dl in parallel with R_CT in series with a
+        # semi-infinite Warburg element (impedance.py "W", parameter in
+        # ohm s^-1/2).
+        "string": "R_1-p(C_1,R_2-W_1)",
+        "guess": [
+            600,  # R_1 = R_s, ~R_HF
+            1.3e-6,  # C_1 = C_dl, from the 1 Hz imaginary part
+            1e5,  # R_2 = R_CT, ~|Z_LF|
+            2e5,  # W_1 = A_W, sets |Z_W(1 Hz)| ~ |Z_LF|
+        ],
+        "mapping": {
+            "R_1": {
+                "name": "R_s",
+                "colour": "#B0B0B0",
+                "compute_conductivity": True,
+                "order": 0,
+            },
+            "C_1": {
+                "name": "C_dl",
+                "colour": "#9AD3A6",
+                "order": 0,
+            },
+            "R_2": {
+                "name": "R_CT",
+                "colour": "#F37F8C",
+                "compute_conductivity": False,
+                "order": 1,
+            },
+            "W_1": {
+                "name": "A_W",
+                "colour": "#F49A80",
+                "order": 0,
+            },
+        },
+    },
+    "Randles_CPE_W": {
+        # Variant of Randles_Cdl_W with C_dl replaced by a CPE. Not drawn in
+        # the figure; added because every other circuit here uses a CPE and
+        # the 1 Hz phase implies alpha ~ 0.9, not 1.
+        "string": "R_1-p(CPE_1,R_2-W_1)",
+        "guess": [
+            600,  # R_1 = R_s, ~R_HF
+            1.5e-6,  # CPE_1_0 = Q_DL
+            0.9,  # CPE_1_1 = alpha_DL
+            1e5,  # R_2 = R_CT, ~|Z_LF|
+            2e5,  # W_1 = A_W
+        ],
+        "mapping": {
+            "R_1": {
+                "name": "R_s",
+                "colour": "#B0B0B0",
+                "compute_conductivity": True,
+                "order": 0,
+            },
+            "CPE_1_0": {
+                "name": "Q_DL",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+            "CPE_1_1": {
+                "name": "alpha_DL",
+                "colour": "#7C84C2",
+                "order": 0,
+            },
+            "R_2": {
+                "name": "R_CT",
+                "colour": "#F37F8C",
+                "compute_conductivity": False,
+                "order": 1,
+            },
+            "W_1": {
+                "name": "A_W",
+                "colour": "#F49A80",
+                "order": 0,
+            },
+        },
+    },
 }
